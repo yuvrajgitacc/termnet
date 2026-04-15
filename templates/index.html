@@ -263,14 +263,16 @@
             }
         });
 
-        document.addEventListener('mousedown', (e) => {
-            // Only focus if not selecting text
-            setTimeout(() => {
-                if (window.getSelection().toString().length === 0) {
-                    cmdIn.focus();
-                }
-            }, 10);
+        // Smooth focus: Only focus if the user isn't selecting text
+        document.addEventListener('mouseup', () => {
+            const selection = window.getSelection().toString();
+            if (!selection) {
+                cmdIn.focus();
+            }
         });
+
+        // Initial focus
+        window.onload = () => cmdIn.focus();
 
         // --- SOCKET EVENTS ---
         socket.on('connect', () => {
