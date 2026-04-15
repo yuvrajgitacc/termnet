@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermNet OS | Official User Guide</title>
+    <meta name="description" content="Complete guide to using TermNet OS — the terminal-based collaboration platform for secure rooms, messaging, and file sharing.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --sidebar-color: #161b22;
+            --accent-color: #58a6ff;
+            --green: #00ff41;
+            --text-main: #c9d1d9;
+            --text-dim: #8b949e;
+            --code-bg: #000000;
+            --border-color: #30363d;
+            --warning-color: #d29922;
+            --success-color: #3fb950;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            line-height: 1.6;
+        }
+
+        /* Sidebar Navigation */
+        nav {
+            width: 280px;
+            height: 100vh;
+            background-color: var(--sidebar-color);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            padding: 2rem 1.5rem;
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-family: 'Fira Code', monospace;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo .ver {
+            font-size: 0.6em;
+            background: var(--success-color);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        nav ul { list-style: none; padding: 0; }
+        nav li { margin: 0.8rem 0; }
+        nav a {
+            text-decoration: none;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            transition: color 0.2s, padding-left 0.2s;
+            display: block;
+            padding: 4px 0;
+        }
+        nav a:hover { 
+            color: var(--accent-color); 
+            padding-left: 6px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 8px 16px;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid var(--accent-color);
+            border-radius: 6px;
+            color: var(--accent-color);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            background: rgba(88, 166, 255, 0.2);
+        }
+
+        /* Main Content */
+        main {
+            margin-left: 280px;
+            padding: 3rem 5%;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        h1 { font-size: 2.5rem; margin-top: 0; color: #fff; }
+        h2 { 
+            font-size: 1.8rem; 
+            color: var(--accent-color); 
+            margin-top: 3rem; 
+            border-left: 4px solid var(--accent-color); 
+            padding-left: 15px; 
+        }
+        h3 { font-size: 1.3rem; color: #fff; margin-top: 2rem; }
+
+        .subtitle { color: var(--text-dim); font-size: 1.1rem; }
+
+        /* Command Styling */
+        .command-block {
+            background-color: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: 'Fira Code', monospace;
+            transition: border-color 0.2s;
+        }
+
+        .command-block:hover {
+            border-color: var(--accent-color);
+        }
+
+        code {
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent-color);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.95em;
+        }
+
+        .cmd-title {
+            display: block;
+            color: #7ee787;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        .cmd-desc { display: block; color: var(--text-dim); font-size: 0.9rem; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75em;
+            font-weight: 600;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        .badge-new { background: var(--success-color); color: #000; }
+        .badge-improved { background: var(--accent-color); color: #000; }
+
+        /* Callout Boxes */
+        .callout {
+            background: rgba(210, 153, 34, 0.1);
+            border: 1px solid var(--warning-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+
+        .callout h4 { margin: 0 0 10px 0; color: var(--warning-color); text-transform: uppercase; letter-spacing: 1px; }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.2rem;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--green);
+            transform: translateY(-2px);
+        }
+
+        .feature-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        .feature-card h4 {
+            color: #fff;
+            margin: 0 0 6px 0;
+            font-size: 0.95rem;
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin: 0;
+        }
+
+        footer {
+            margin-top: 5rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            nav { display: none; }
+            main { margin-left: 0; padding: 2rem; }
+            h1 { font-size: 1.8rem; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="logo"><span>&gt;_</span> TermNet <span class="ver">v2.0</span></div>
+    <ul>
+        <li><a href="#getting-started">1. Getting Started</a></li>
+        <li><a href="#communication">2. Rooms & Chat</a></li>
+        <li><a href="#file-sharing">3. File Sharing</a></li>
+        <li><a href="#new-features">4. New in v2.0</a></li>
+        <li><a href="#limitations">5. Considerations</a></li>
+    </ul>
+    <a href="/" class="back-link">← Launch Terminal</a>
+</nav>
+
+<main>
+    <header>
+        <h1>TermNet OS <small style="font-size: 0.4em; vertical-align: middle; background: #238636; padding: 4px 8px; border-radius: 10px;">v2.0</small></h1>
+        <p class="subtitle">A lightweight, web-based terminal emulator designed for secure, ephemeral collaboration and Privacy by Design.</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">🔒</div>
+                <h4>Encrypted Rooms</h4>
+                <p>Password-protected channels for private conversations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">💬</div>
+                <h4>Real-time Chat</h4>
+                <p>Instant messaging via WebSocket connections.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📁</div>
+                <h4>File Sharing</h4>
+                <p>Chunked transfer with live progress tracking.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🗂️</div>
+                <h4>Private Vault</h4>
+                <p>Personal encrypted file storage per user.</p>
+            </div>
+        </div>
+    </header>
+
+    <section id="getting-started">
+        <h2>1. Getting Started</h2>
+        <p>Access the platform via your deployment URL or run locally with <code>python app.py</code></p>
+        
+        <div class="command-block">
+            <span class="cmd-title">signup &lt;your_username&gt;</span>
+            <span class="cmd-desc">Example: <code>signup yuvraj</code> — Creates your profile on the system.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">login &lt;your_username&gt;</span>
+            <span class="cmd-desc">Example: <code>login yuvraj</code> — Authenticates your session. Required every time you connect.</span>
+        </div>
+    </section>
+
+    <section id="communication">
+        <h2>2. Rooms & Communication</h2>
+        
+        <h3>Channel Management</h3>
+        <div class="command-block">
+            <span class="cmd-title">list</span>
+            <span class="cmd-desc">Displays all active communication rooms.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">create &lt;room_name&gt; - &lt;password&gt;</span>
+            <span class="cmd-desc">Example: <code>create studygroup - 1234</code> — Deploy a password-protected room.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">jump &lt;room_name&gt; - &lt;password&gt;</span>
+            <span class="cmd-desc">Connects you to a room. Others in the room will be notified.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">destroy &lt;room_name&gt;</span>
+            <span class="cmd-desc">Deletes a room and all associated files. Cannot destroy 'lobby'.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">who <span class="badge badge-new">NEW</span></span>
+            <span class="cmd-desc">Shows all users currently connected to your room.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">exit</span>
+            <span class="cmd-desc">Disconnects from the current room and returns to home.</span>
+        </div>
+
+        <h3>Messaging</h3>
+        <div class="command-block">
+            <span class="cmd-title">msg &lt;text&gt;</span>
+            <span class="cmd-desc">Broadcasts a message to everyone in your current room.</span>
+        </div>
+        <div class="command-block">
+            <span class="cmd-title">clear</span>
+            <span class="cmd-desc">Wipes the terminal buffer for a clean workspace.</span>
+        </div>
+    </section>
+
+    <section id="file-sharing">
+        <h2>3. File Sharing Protocol</h2>
+        
+        <div class="command-block">
+            <span class="cmd-title">share <span class="badge badge-improved">IMPROVED</span></span>
+            <span class="cmd-desc">Upload a file to the <strong>Public Room</strong>. Uses chunked transfer with a live progress bar. You can also <strong>drag-and-drop</strong> files onto the terminal.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">vault</span>
+            <span class="cmd-desc">Upload a file to <strong>Private Storage</strong>. Only you can access this.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">fetch &lt;filename&gt; <span class="badge badge-improved">IMPROVED</span></span>
+            <span class="cmd-desc">Example: <code>fetch notes.pdf</code> — Downloads with chunked transfer and a progress bar. Searches both room and your private vault.</span>
+        </div>
+
+        <div class="command-block">
+            <span class="cmd-title">profile</span>
+            <span class="cmd-desc">Displays your identity card and a list of all your uploaded files with sizes.</span>
+        </div>
+    </section>
+
+    <section id="new-features">
+        <h2>4. New in v2.0</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">📊</div>
+                <h4>Progress Bars</h4>
+                <p>Terminal-style animated progress bars for all file transfers with speed indicators.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⬆️</div>
+                <h4>Drag & Drop</h4>
+                <p>Drag files directly onto the terminal to share them in the current room.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⌨️</div>
+                <h4>Command History</h4>
+                <p>Use ↑ and ↓ arrow keys to cycle through previous commands.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">👥</div>
+                <h4>Room Presence</h4>
+                <p>The <code>who</code> command shows everyone online in your room. Join/leave notifications included.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔔</div>
+                <h4>Tab Notifications</h4>
+                <p>Browser tab title flashes when you receive a message while the tab is in background.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔄</div>
+                <h4>Auto-Reconnect</h4>
+                <p>Automatic WebSocket reconnection with visual status indicator in the header.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="limitations">
+        <h2>5. Important Considerations</h2>
+        <div class="callout">
+            <h4>Critical: Free Hosting Limitations</h4>
+            <ul>
+                <li><strong>Cold Start:</strong> After 15 mins of inactivity, the server sleeps. The first request takes <strong>30-60 seconds</strong> to load.</li>
+                <li><strong>Ephemeral Storage:</strong> All data (accounts, messages, files) is <strong>wiped clean</strong> whenever the server restarts or sleeps.</li>
+                <li><strong>Auto-Cleanup:</strong> Files older than 24 hours are automatically deleted.</li>
+                <li><strong>File Size:</strong> Maximum upload size is 50MB per file.</li>
+            </ul>
+        </div>
+    </section>
+
+    <footer>
+        TermNet OS v2.0 | Privacy by Design | Built with Flask + Socket.IO
+    </footer>
+</main>
+
+</body>
+</html>

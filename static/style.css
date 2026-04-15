@@ -1,0 +1,38 @@
+/* ═══════════════════════════════════════════════════
+   TERMNET OS — GLOBAL STYLESHEET
+   Terminal aesthetic with modern refinements
+   ═══════════════════════════════════════════════════ */
+
+:root {
+    --bg-deep: #05080a;
+    --bg-surface: #0a0f14;
+    --green-primary: #00ff41;
+    --green-dim: #00aa2a;
+    --green-glow: rgba(0, 255, 65, 0.08);
+    --cyan: #00e5ff;
+    --cyan-dim: #008fa3;
+    --yellow: #fdcb58;
+    --red: #ff4757;
+    --white: #e8eaed;
+    --white-dim: #858b93;
+    --purple: #c084fc;
+    --orange: #ff9f43;
+    --font-mono: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+    background: var(--green-dim); 
+    border-radius: 3px; 
+}
+::-webkit-scrollbar-thumb:hover { background: var(--green-primary); }
+
+/* ── Selection color ── */
+::selection {
+    background: rgba(0, 255, 65, 0.3);
+    color: #fff;
+}

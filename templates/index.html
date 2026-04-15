@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermNet OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #00ff41;
+            --system-color: #00d4ff;
+            --error-color: #ff4c4c;
+            --prompt-color: #fdfd96;
+            --user-cmd-color: #ffffff;
+            --chat-color: #00ff41;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-x: hidden;
+            line-height: 1.4;
+        }
+
+        /* Fixed Header for ASCII Art */
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: var(--bg-color);
+            padding: 20px 20px 10px 20px;
+            z-index: 100;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+        }
+
+        .ascii-logo {
+            color: var(--system-color);
+            font-size: 10px;
+            line-height: 1.1;
+            white-space: pre;
+            margin-bottom: 5px;
+        }
+
+        .status-bar {
+            font-size: 12px;
+            color: var(--text-color);
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        /* Main Terminal Area */
+        #terminal {
+            margin-top: 130px; /* Offset for fixed header */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #output {
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+
+        .input-line {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        #prompt {
+            color: var(--prompt-color);
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        #cmdInput {
+            background: transparent;
+            border: none;
+            color: var(--user-cmd-color);
+            outline: none;
+            flex: 1;
+            font-family: inherit;
+            font-size: 16px;
+            caret-color: var(--text-color);
+        }
+
+        /* Message Types */
+        .line { margin-bottom: 2px; }
+        .system { color: var(--system-color); }
+        .error { color: var(--error-color); }
+        .jump_success { color: #ffcc00; font-weight: bold; }
+        .user-cmd { color: var(--user-cmd-color); opacity: 0.8; }
+        .chat-msg { color: var(--chat-color); }
+        .username { color: #fdfd96; font-weight: bold; }
+
+        /* Minimal Progress Bar Styles */
+        .progress-container {
+            margin: 5px 0;
+            padding: 5px 0;
+            max-width: 300px;
+            font-size: 12px;
+        }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            color: #fff;
+        }
+        .progress-bar-track {
+            height: 2px;
+            background: #222;
+            position: relative;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: #fff;
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        /* Allow text selection for copy-paste */
+        #output {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* Hide Scrollbar but allow scrolling */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #333; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+        #drop-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 255, 65, 0.1);
+            z-index: 200;
+            border: 2px dashed var(--text-color);
+            justify-content: center;
+            align-items: center;
+            color: var(--text-color);
+            font-weight: bold;
+        }
+        #drop-overlay.visible { display: flex; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <div class="ascii-logo">
+ ████████╗███████╗██████╗ ███╗   ███╗███╗   ██╗███████╗████████╗
+ ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║████╗  ██║██╔════╝╚══██╔══╝
+    ██║   █████╗  ██████╔╝██╔████╔██║██╔██╗ ██║█████╗     ██║   
+    ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║╚██╗██║██╔══╝     ██║   
+    ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║   
+    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝</div>
+        <div class="status-bar">
+            [ SYSTEM ONLINE - v2.1 ] | STATUS: <span id="conn-status">CONNECTING</span>
+        </div>
+    </div>
+
+    <div id="terminal">
+        <div id="output"></div>
+        <div class="input-line">
+            <span id="prompt">termnet/home></span>
+            <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
+        </div>
+    </div>
+
+    <input type="file" id="filePicker" style="display:none;">
+    <div id="drop-overlay">DROP FILE TO UPLOAD</div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const out = document.getElementById('output');
+        const cmdIn = document.getElementById('cmdInput');
+        const promptEl = document.getElementById('prompt');
+        const filePicker = document.getElementById('filePicker');
+        const connStatus = document.getElementById('conn-status');
+        const dropOverlay = document.getElementById('drop-overlay');
+
+        let currentUser = 'guest';
+        let currentRoom = 'home';
+        let uploadMode = 'private';
+        let commandHistory = [];
+        let historyIndex = -1;
+        let activeDownloads = {};
+
+        function print(msg, type = 'chat-msg') {
+            const div = document.createElement('div');
+            div.className = `line ${type}`;
+            
+            if (type === 'chat-msg' && msg.includes(': ')) {
+                const idx = msg.indexOf(': ');
+                const user = msg.substring(0, idx);
+                const text = msg.substring(idx + 2);
+                div.innerHTML = `<span class="username">${escapeHtml(user)}</span>: ${escapeHtml(text)}`;
+            } else {
+                div.textContent = msg;
+            }
+            
+            out.appendChild(div);
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function updatePrompt() {
+            const userPart = currentUser !== 'guest' ? `(${currentUser})` : '';
+            promptEl.textContent = `termnet/${currentRoom}${userPart}>`;
+        }
+
+        // --- COMMAND HANDLING ---
+        cmdIn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdIn.value.trim();
+                if (!val) return;
+
+                commandHistory.unshift(val);
+                if (commandHistory.length > 50) commandHistory.pop();
+                historyIndex = -1;
+
+                if (val === 'clear') {
+                    out.innerHTML = '';
+                    cmdIn.value = '';
+                    return;
+                }
+
+                print(`${promptEl.textContent} ${val}`, 'user-cmd');
+                socket.emit('command', { command: val });
+                cmdIn.value = '';
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    cmdIn.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    cmdIn.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = -1;
+                    cmdIn.value = '';
+                }
+            }
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            // Only focus if not selecting text
+            setTimeout(() => {
+                if (window.getSelection().toString().length === 0) {
+                    cmdIn.focus();
+                }
+            }, 10);
+        });
+
+        // --- SOCKET EVENTS ---
+        socket.on('connect', () => {
+            connStatus.textContent = 'ONLINE';
+            print('[SYS] Connection established.', 'system');
+        });
+
+        socket.on('disconnect', () => {
+            connStatus.textContent = 'OFFLINE';
+            print('[SYS] Connection lost.', 'error');
+        });
+
+        socket.on('response', (data) => {
+            print(`[SYS] ${data.msg}`, data.type || 'system');
+            if (data.user) currentUser = data.user;
+            if (data.room !== undefined) currentRoom = data.room;
+            updatePrompt();
+        });
+
+        socket.on('chat_msg', (data) => {
+            print(`${data.user}: ${data.msg}`, 'chat-msg');
+        });
+
+        // --- FILE UPLOAD (CHUNKED) ---
+        const UPLOAD_CHUNK_SIZE = 64 * 1024;
+
+        socket.on('trigger_upload', (data) => {
+            uploadMode = data.mode;
+            // Ask user if they want to upload a folder or files
+            print(`[SYS] Prepare for ${uploadMode} upload. Select File(s) or Folder.`, 'system');
+            if (confirm("Upload a Folder? (Cancel for Single/Multiple Files)")) {
+                filePicker.click();
+            } else {
+                singleFilePicker.click();
+            }
+        });
+
+        [filePicker, singleFilePicker].forEach(picker => {
+            picker.addEventListener('change', function() {
+                const files = Array.from(this.files);
+                if (files.length === 0) return;
+
+                files.forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const base64Data = e.target.result;
+                        const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
+                        const isImage = file.type.startsWith('image/');
+                        
+                        print(`[SYS] ${isImage ? 'IMAGE' : 'FILE'} DETECTED: ${file.name}`, 'system');
+                        
+                        socket.emit('file_upload_start', {
+                            filename: file.name,
+                            filesize: file.size,
+                            totalChunks: totalChunks,
+                            mode: uploadMode
+                        });
+
+                        socket.once('upload_ready', (ack) => {
+                            const transferId = ack.transferId;
+                            createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, `upload-${transferId}`);
+                            
+                            let sentChunks = 0;
+                            function sendNextChunk() {
+                                const start = sentChunks * UPLOAD_CHUNK_SIZE;
+                                const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
+                                socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
+                                sentChunks++;
+                                updateProgressBar(`upload-${transferId}`, sentChunks / totalChunks);
+                                if (sentChunks < totalChunks) setTimeout(sendNextChunk, 0);
+                                else socket.emit('file_upload_complete', { transferId });
+                            }
+                            sendNextChunk();
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+        });
+
+        // --- FILE DOWNLOAD (CHUNKED) ---
+        socket.on('file_download_start', (data) => {
+            const id = `dl-${data.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            activeDownloads[data.filename] = { chunks: [], total: data.totalChunks, id: id };
+            createProgressBar(`↓ DOWNLOADING: ${data.filename}`, id);
+        });
+
+        socket.on('file_download_chunk', (data) => {
+            const dl = activeDownloads[data.filename];
+            if (!dl) return;
+            dl.chunks[data.index] = data.chunk;
+            updateProgressBar(dl.id, (Object.keys(dl.chunks).length) / dl.total);
+        });
+
+        socket.on('file_download_complete', (data) => {
+            const dl = activeDownloads[data.filename];
+            if (!dl) return;
+            const a = document.createElement('a');
+            a.href = dl.chunks.join('');
+            a.download = data.filename;
+            a.click();
+            delete activeDownloads[data.filename];
+        });
+
+        // --- PROGRESS BAR UTILS ---
+        function createProgressBar(label, id) {
+            const container = document.createElement('div');
+            container.className = 'progress-container';
+            container.id = `container-${id}`;
+            container.innerHTML = `
+                <div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div>
+                <div class="progress-bar-track"><div class="progress-bar-fill" id="fill-${id}"></div></div>
+            `;
+            out.appendChild(container);
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        function updateProgressBar(id, progress) {
+            const pct = Math.round(progress * 100);
+            const fill = document.getElementById(`fill-${id}`);
+            const pctEl = document.getElementById(`pct-${id}`);
+            if (fill) fill.style.width = `${pct}%`;
+            if (pctEl) pctEl.textContent = `${pct}%`;
+            if (pct >= 100) {
+                setTimeout(() => {
+                    const container = document.getElementById(`container-${id}`);
+                    if (container) container.style.opacity = '0.5';
+                }, 1000);
+            }
+        }
+
+        // --- DRAG & DROP ---
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (currentUser !== 'guest' && currentRoom !== 'home') dropOverlay.classList.add('visible');
+        });
+        dropOverlay.addEventListener('dragleave', () => dropOverlay.classList.remove('visible'));
+        dropOverlay.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropOverlay.classList.remove('visible');
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                uploadMode = 'public';
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                filePicker.files = dataTransfer.files;
+                filePicker.dispatchEvent(new Event('change'));
+            }
+        });
+    </script>
+</body>
+</html>
