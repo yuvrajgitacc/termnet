@@ -3,178 +3,497 @@
 <head>
     <meta charset="UTF-8">
     <title>TermNet OS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg: #0a0a0a; --text: #00ff41; --sys: #00d4ff; --err: #ff4c4c; --prm: #fdfd96; --cmd: #fff; }
+        :root {
+            --bg: #0a0a0a;
+            --text: #00ff41;
+            --sys: #00d4ff;
+            --err: #ff4c4c;
+            --prm: #fdfd96;
+            --cmd: #fff;
+            --dim: #555;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); color: var(--text); font-family: 'Courier Prime', monospace; padding: 20px; overflow-x: hidden; height: 100vh; display: flex; flex-direction: column; }
-        #header { position: fixed; top: 0; left: 0; width: 100%; background: var(--bg); padding: 20px; z-index: 100; border-bottom: 1px solid rgba(0,255,65,0.1); }
-        .ascii-logo { color: var(--sys); font-size: 10px; line-height: 1.1; white-space: pre; }
-        #terminal { margin-top: 135px; flex: 1; display: flex; flex-direction: column; padding-bottom: 50px; }
-        #output { white-space: pre-wrap; margin-bottom: 10px; user-select: text !important; }
-        .input-line { display: flex; align-items: center; width: 100%; position: relative; }
-        #prompt { color: var(--prm); margin-right: 10px; white-space: nowrap; }
-        #cmdInput { background: transparent; border: none; color: var(--cmd); outline: none; flex: 1; font-family: inherit; font-size: 16px; caret-color: var(--text); }
-        .line { margin-bottom: 2px; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', 'Monaco', 'Lucida Console', 'Courier New', monospace;
+            font-weight: 400;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Fixed Header ── */
+        #header {
+            background: var(--bg);
+            padding: 12px 20px 8px;
+            border-bottom: 1px solid rgba(0,255,65,0.15);
+            flex-shrink: 0;
+        }
+        .ascii-logo {
+            color: var(--sys);
+            font-size: 10px;
+            line-height: 1.1;
+            white-space: pre;
+            font-family: inherit;
+        }
+        .header-sub {
+            color: var(--dim);
+            font-size: 12px;
+            margin-top: 6px;
+        }
+        .header-sub span {
+            color: var(--text);
+        }
+
+        /* ── Terminal Body ── */
+        #terminal {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 20px;
+        }
+        #output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        #terminal::-webkit-scrollbar { width: 5px; }
+        #terminal::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+        /* ── Input Line (inline with output, like real CMD) ── */
+        .input-line {
+            display: flex;
+            align-items: center;
+            margin-top: 2px;
+        }
+        #prompt {
+            color: var(--prm);
+            margin-right: 6px;
+            white-space: nowrap;
+            font-weight: normal;
+        }
+        #cmdInput {
+            background: transparent;
+            border: none;
+            color: var(--cmd);
+            outline: none;
+            flex: 1;
+            font-family: inherit;
+            font-size: 13px;
+            caret-color: var(--text);
+        }
+
+        /* ── Messages ── */
+        .line { margin-bottom: 2px; animation: fadeIn 0.1s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .system { color: var(--sys); }
         .error { color: var(--err); }
-        .user-cmd { color: var(--cmd); opacity: 0.8; }
+        .user-cmd { color: var(--cmd); opacity: 0.6; }
+        .chat-msg { color: var(--text); }
         .username { color: var(--prm); font-weight: bold; }
-        .progress-container { margin: 8px 0; max-width: 300px; font-size: 12px; }
-        .progress-track { height: 2px; background: #1a1a1a; margin-top: 4px; }
-        .progress-fill { height: 100%; background: #fff; width: 0%; transition: width 0.1s; }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #333; }
-        #drop-overlay { display: none; position: fixed; inset: 0; background: rgba(0,255,65,0.1); z-index: 200; border: 2px dashed var(--text); justify-content: center; align-items: center; font-weight: bold; }
+
+        /* ── Terminal Progress Bar ── */
+        .progress-box {
+            margin: 6px 0;
+            padding: 8px 12px;
+            border: 1px solid rgba(0,255,65,0.2);
+            border-radius: 3px;
+            background: rgba(0,255,65,0.02);
+            max-width: 500px;
+            font-size: 12px;
+        }
+        .progress-label {
+            color: var(--sys);
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .progress-label .speed {
+            color: var(--dim);
+        }
+        .progress-blocks {
+            color: var(--text);
+            letter-spacing: 0px;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .progress-blocks .empty {
+            color: #1a2a1a;
+        }
+        .progress-pct {
+            color: var(--sys);
+            font-weight: bold;
+            margin-left: 6px;
+        }
+        .progress-done {
+            color: var(--text);
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* ── Drag & Drop ── */
+        #drop-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,255,65,0.08);
+            z-index: 200;
+            border: 2px dashed var(--text);
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--text);
+        }
         #drop-overlay.visible { display: flex; }
+
+        /* ── Mobile ── */
+        @media (max-width: 600px) {
+            .ascii-logo { font-size: 6px; }
+            #output { padding: 8px 10px; font-size: 12px; }
+            .input-line { padding: 8px 10px; }
+            #cmdInput { font-size: 12px; }
+        }
     </style>
 </head>
 <body>
-    <div id="header">
-        <div class="ascii-logo">
+
+<!-- Header -->
+<div id="header">
+    <div class="ascii-logo">
  ████████╗███████╗██████╗ ███╗   ███╗███╗   ██╗███████╗████████╗
  ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║████╗  ██║██╔════╝╚══██╔══╝
-    ██║   █████╗  ██████╔╝██╔████╔██║██╔██╗ ██║█████╗     ██║   
-    ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║╚██╗██║██╔══╝     ██║   
-    ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║   
+    ██║   █████╗  ██████╔╝██╔████╔██║██╔██╗ ██║█████╗     ██║
+    ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║╚██╗██║██╔══╝     ██║
+    ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║
     ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝</div>
+    <div class="header-sub">[ SYSTEM ONLINE — v2.0 ]  type <span>'help'</span> for commands</div>
+</div>
+
+<!-- Terminal -->
+<div id="terminal">
+    <div id="output"></div>
+    <div class="input-line">
+        <span id="prompt">termnet/home></span>
+        <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
     </div>
-    <div id="terminal">
-        <div id="output"></div>
-        <div class="input-line">
-            <span id="prompt">termnet/home></span>
-            <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
+</div>
+
+<!-- Hidden elements -->
+<input type="file" id="filePicker" style="display:none;">
+<div id="drop-overlay">DROP FILE TO UPLOAD</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// TERMNET CLIENT ENGINE v2.0
+// Files via HTTP, Chat via WebSocket
+// ══════════════════════════════════════
+
+const socket = io({ reconnection: true, reconnectionDelay: 1000 });
+const terminal = document.getElementById('terminal');
+const out = document.getElementById('output');
+const cmdIn = document.getElementById('cmdInput');
+const promptEl = document.getElementById('prompt');
+const filePicker = document.getElementById('filePicker');
+const dropOverlay = document.getElementById('drop-overlay');
+
+let currentUser = 'guest';
+let currentRoom = 'home';
+let uploadMode = 'public';
+let cmdHistory = [];
+let historyIdx = -1;
+
+// ── Print to terminal ──
+function print(msg, type = 'system') {
+    const div = document.createElement('div');
+    div.className = `line ${type}`;
+    if (type === 'chat-msg' && msg.includes(': ')) {
+        const idx = msg.indexOf(': ');
+        div.innerHTML = `<span class="username">${esc(msg.substring(0, idx))}</span>: ${esc(msg.substring(idx + 2))}`;
+    } else {
+        div.textContent = msg;
+    }
+    out.appendChild(div);
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function updatePrompt() {
+    const u = currentUser !== 'guest' ? `(${currentUser})` : '';
+    promptEl.textContent = `termnet/${currentRoom}${u}>`;
+}
+
+// ── Terminal Progress Bar (real terminal style) ──
+function createProgressBar(label, id) {
+    const box = document.createElement('div');
+    box.className = 'progress-box';
+    box.id = `pb-${id}`;
+    box.innerHTML = `
+        <div class="progress-label">
+            <span>${esc(label)}</span>
+            <span class="speed" id="spd-${id}"></span>
         </div>
-    </div>
-    <input type="file" id="filePicker" style="display:none;" multiple>
-    <div id="drop-overlay">DROP TO UPLOAD</div>
+        <div class="progress-blocks" id="bar-${id}">
+            ${'░'.repeat(30)} <span class="progress-pct">0%</span>
+        </div>
+    `;
+    out.appendChild(box);
+    terminal.scrollTop = terminal.scrollHeight;
+}
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script>
-        const socket = io({ reconnection: true });
-        const out = document.getElementById('output');
-        const cmdIn = document.getElementById('cmdInput');
-        const promptEl = document.getElementById('prompt');
-        const filePicker = document.getElementById('filePicker');
-        
-        let currentUser = 'guest', currentRoom = 'home', isUploading = false;
-        let activeDownloads = {};
+function updateProgress(id, frac, speed) {
+    const barEl = document.getElementById(`bar-${id}`);
+    const spdEl = document.getElementById(`spd-${id}`);
+    if (!barEl) return;
 
-        function print(msg, type = 'system') {
-            const div = document.createElement('div');
-            div.className = `line ${type}`;
-            if (type === 'chat-msg' && msg.includes(': ')) {
-                const idx = msg.indexOf(': ');
-                div.innerHTML = `<span class="username">${escapeHtml(msg.substring(0, idx))}</span>: ${escapeHtml(msg.substring(idx + 2))}`;
-            } else div.textContent = msg;
-            out.appendChild(div);
-            window.scrollTo(0, document.body.scrollHeight);
+    const pct = Math.min(Math.round(frac * 100), 100);
+    const total = 30;
+    const filled = Math.round((pct / 100) * total);
+    const empty = total - filled;
+
+    barEl.innerHTML = `${'█'.repeat(filled)}<span class="empty">${'░'.repeat(empty)}</span> <span class="progress-pct">${pct}%</span>`;
+    if (spdEl && speed) spdEl.textContent = speed;
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+function completeProgress(id, msg) {
+    updateProgress(id, 1.0, 'done');
+    const done = document.createElement('div');
+    done.className = 'line progress-done';
+    done.textContent = `[+] ${msg}`;
+    const box = document.getElementById(`pb-${id}`);
+    if (box) box.after(done);
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+function formatSize(bytes) {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0, s = bytes;
+    while (s >= 1024 && i < units.length - 1) { s /= 1024; i++; }
+    return `${s.toFixed(1)} ${units[i]}`;
+}
+
+// ══════════════════════════════════════
+// COMMAND INPUT
+// ══════════════════════════════════════
+
+cmdIn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        const val = cmdIn.value.trim();
+        if (!val) return;
+
+        cmdHistory.unshift(val);
+        if (cmdHistory.length > 50) cmdHistory.pop();
+        historyIdx = -1;
+
+        if (val === 'clear') {
+            out.innerHTML = '';
+            cmdIn.value = '';
+            return;
         }
 
-        function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-        function updatePrompt() { promptEl.textContent = `termnet/${currentRoom}${currentUser !== 'guest' ? '('+currentUser+')' : ''}>`; }
+        print(`${promptEl.textContent} ${val}`, 'user-cmd');
+        socket.emit('command', { command: val });
+        cmdIn.value = '';
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIdx < cmdHistory.length - 1) {
+            historyIdx++;
+            cmdIn.value = cmdHistory[historyIdx];
+        }
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) {
+            historyIdx--;
+            cmdIn.value = cmdHistory[historyIdx];
+        } else {
+            historyIdx = -1;
+            cmdIn.value = '';
+        }
+    }
+});
 
-        cmdIn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const val = cmdIn.value.trim();
-                if (!val) return;
-                if (val === 'clear') { out.innerHTML = ''; cmdIn.value = ''; return; }
-                print(`${promptEl.textContent} ${val}`, 'user-cmd');
-                socket.emit('command', { command: val });
-                cmdIn.value = '';
-            }
-        });
+// Focus input on click
+document.addEventListener('click', () => {
+    if (window.getSelection().toString().length === 0) cmdIn.focus();
+});
 
-        document.addEventListener('click', () => { if (window.getSelection().toString().length === 0) cmdIn.focus(); });
+// ══════════════════════════════════════
+// WEBSOCKET HANDLERS (Chat + Signals)
+// ══════════════════════════════════════
 
-        socket.on('connect', () => {
-            print('[SYS] Online.', 'system');
-            if (currentUser !== 'guest' || currentRoom !== 'home') {
-                socket.emit('restore_session', { user: currentUser, room: currentRoom });
-            }
-        });
+socket.on('connect', () => {
+    print('[SYS] Connection established.', 'system');
+    if (currentUser !== 'guest' || currentRoom !== 'home') {
+        socket.emit('restore_session', { user: currentUser, room: currentRoom });
+    }
+});
 
-        socket.on('response', (data) => {
-            print(`[SYS] ${data.msg}`, data.type || 'system');
-            if (data.user) currentUser = data.user;
-            if (data.room !== undefined) currentRoom = data.room;
-            if (data.jump) out.innerHTML = ''; // Clear output on fresh room jump
-            updatePrompt();
-        });
+socket.on('disconnect', () => {
+    print('[SYS] Connection lost. Reconnecting...', 'error');
+});
 
-        socket.on('chat_msg', (d) => print(`${d.user}: ${d.msg}`, 'chat-msg'));
+socket.on('response', (data) => {
+    print(`[SYS] ${data.msg}`, data.type || 'system');
+    if (data.user) currentUser = data.user;
+    if (data.room !== undefined) currentRoom = data.room;
+    updatePrompt();
+});
 
-        // --- BACKGROUND BINARY STREAMING ---
-        const CHUNK_SIZE = 512 * 1024; // 512KB Chunks for stability
+socket.on('chat_msg', (d) => {
+    print(`${d.user}: ${d.msg}`, 'chat-msg');
+    if (document.hidden) {
+        document.title = '* New Message - TermNet';
+        setTimeout(() => { document.title = 'TermNet OS'; }, 3000);
+    }
+});
 
-        socket.on('trigger_upload', (d) => { uploadMode = d.mode; filePicker.click(); });
+// ══════════════════════════════════════
+// FILE UPLOAD — HTTP with XHR progress
+// Fast like WhatsApp, doesn't block WebSocket
+// ══════════════════════════════════════
 
-        filePicker.addEventListener('change', function() {
-            Array.from(this.files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const buffer = e.target.result;
-                    const total = Math.ceil(buffer.byteLength / CHUNK_SIZE);
-                    socket.emit('file_upload_start', { filename: file.name, filesize: file.size, totalChunks: total, mode: uploadMode });
-                    
-                    socket.once('upload_ready', (ack) => {
-                        const tid = ack.transferId;
-                        const pid = `up-${tid}`;
-                        createProgressBar(`↑ ${file.name} ...`, pid);
-                        let sent = 0;
+socket.on('trigger_upload', (d) => {
+    uploadMode = d.mode;
+    filePicker.value = '';
+    filePicker.click();
+});
 
-                        const sendNext = () => {
-                            if (sent >= total) {
-                                socket.emit('file_upload_complete', { transferId: tid });
-                                return;
-                            }
-                            const chunk = buffer.slice(sent * CHUNK_SIZE, (sent + 1) * CHUNK_SIZE);
-                            socket.emit('file_upload_chunk', { transferId: tid, index: sent, chunk: chunk });
-                            sent++;
-                            updateProgressBar(pid, sent / total);
-                            // 5ms delay allows Chat & Heartbeat to process
-                            setTimeout(sendNext, 5); 
-                        };
-                        sendNext();
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            });
-        });
+filePicker.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    uploadFile(file, uploadMode);
+});
 
-        socket.on('file_download_start', (d) => {
-            activeDownloads[d.filename] = { chunks: [], total: d.totalChunks };
-            createProgressBar(`↓ ${d.filename} ...`, `dl-${d.filename}`);
-        });
-        socket.on('file_download_chunk', (d) => {
-            const dl = activeDownloads[d.filename];
-            if (!dl) return;
-            dl.chunks[d.index] = d.chunk;
-            updateProgressBar(`dl-${d.filename}`, (Object.keys(dl.chunks).length / dl.total));
-        });
-        socket.on('file_download_complete', (d) => {
-            const dl = activeDownloads[d.filename];
-            const blob = new Blob(dl.chunks);
+function uploadFile(file, mode) {
+    const id = 'up-' + Date.now();
+    const label = (mode === 'public' ? '>> SHARING' : '>> VAULT') + `: ${file.name} (${formatSize(file.size)})`;
+    createProgressBar(label, id);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sender', currentUser);
+    formData.append('room', currentRoom);
+    formData.append('mode', mode);
+
+    const xhr = new XMLHttpRequest();
+    const startTime = performance.now();
+
+    // ── Real upload progress from browser ──
+    xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const frac = e.loaded / e.total;
+            const elapsed = (performance.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            updateProgress(id, frac, `${formatSize(Math.round(speed))}/s`);
+        }
+    };
+
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            const res = JSON.parse(xhr.responseText);
+            completeProgress(id, `${file.name} uploaded successfully`);
+        } else {
+            let errMsg = 'Upload failed';
+            try { errMsg = JSON.parse(xhr.responseText).error || errMsg; } catch(e) {}
+            print(`[!] ${errMsg}`, 'error');
+        }
+    };
+
+    xhr.onerror = () => {
+        print('[!] Upload failed — network error.', 'error');
+    };
+
+    xhr.open('POST', '/upload');
+    xhr.send(formData);
+}
+
+// ══════════════════════════════════════
+// FILE DOWNLOAD — HTTP direct download
+// ══════════════════════════════════════
+
+socket.on('file_download', (d) => {
+    const id = 'dl-' + Date.now();
+    createProgressBar(`<< FETCHING: ${d.filename} (${formatSize(d.filesize)})`, id);
+
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'blob';
+    const startTime = performance.now();
+
+    xhr.onprogress = (e) => {
+        if (e.lengthComputable) {
+            const frac = e.loaded / e.total;
+            const elapsed = (performance.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            updateProgress(id, frac, `${formatSize(Math.round(speed))}/s`);
+        }
+    };
+
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            const blob = xhr.response;
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = d.filename; a.click();
-            print(`✔ Saved: ${d.filename}`, 'system');
-        });
-
-        function createProgressBar(label, id) {
-            const div = document.createElement('div');
-            div.className = 'progress-container';
-            div.innerHTML = `<div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div><div class="progress-track"><div class="progress-fill" id="fill-${id}"></div></div>`;
-            out.appendChild(div);
-            window.scrollTo(0, document.body.scrollHeight);
+            a.href = URL.createObjectURL(blob);
+            a.download = d.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            completeProgress(id, `Saved: ${d.filename}`);
+        } else {
+            print('[!] Download failed.', 'error');
         }
+    };
 
-        function updateProgressBar(id, prog) {
-            const pct = Math.round(prog * 100);
-            const fill = document.getElementById(`fill-${id}`);
-            const pctEl = document.getElementById(`pct-${id}`);
-            if (fill) fill.style.width = `${pct}%`;
-            if (pctEl) pctEl.textContent = `${pct}%`;
-        }
-    </script>
+    xhr.onerror = () => {
+        print('[!] Download failed — network error.', 'error');
+    };
+
+    xhr.open('GET', d.url);
+    xhr.send();
+});
+
+// ══════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════
+
+document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (currentUser !== 'guest') dropOverlay.classList.add('visible');
+});
+dropOverlay.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropOverlay.classList.remove('visible');
+});
+dropOverlay.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropOverlay.classList.remove('visible');
+    if (currentUser === 'guest') { print('[!] Login first.', 'error'); return; }
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const mode = currentRoom !== 'home' ? 'public' : 'private';
+    uploadFile(file, mode);
+});
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+
+window.addEventListener('load', () => cmdIn.focus());
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) document.title = 'TermNet OS';
+});
+</script>
 </body>
 </html>

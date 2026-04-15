@@ -9,7 +9,12 @@ env/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
+
+# Uploads
+uploads/
 
 # OS
 .DS_Store
 Thumbs.db
+
