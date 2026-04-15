@@ -248,19 +248,21 @@ def handle_command(data):
             if not args:
                 emit('response', {'type': 'error', 'msg': "Usage: fetch <filename>"})
             else:
-                full_filename = " ".join(args)
+                full_filename = " ".join(args).strip()
                 user = sessions[sid]['user']
-                # Search in current room files AND user's private vault
+                current_room = sessions[sid]['room']
+                
+                # Search case-insensitively and handle spaces correctly
                 c.execute("""SELECT filename, content, filesize FROM files 
-                            WHERE filename=? AND (room=? OR (room='private' AND sender=?))
+                            WHERE LOWER(filename)=LOWER(?) AND (room=? OR (room='private' AND sender=?))
                             ORDER BY id DESC LIMIT 1""", 
-                         (full_filename, sessions[sid]['room'], user))
+                         (full_filename, current_room, user))
                 row = c.fetchone()
                 if row:
                     content = row['content']
                     filesize = row['filesize'] or len(content)
                     # Send file in chunks for progress tracking
-                    chunk_size = 64 * 1024  # 64KB chunks
+                    chunk_size = 1024 * 1024  # 1MB chunks
                     total_chunks = max(1, math.ceil(len(content) / chunk_size))
                     
                     emit('file_download_start', {
