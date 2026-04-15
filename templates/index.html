@@ -4,153 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TermNet OS</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #0a0a0a;
-            --text-color: #00ff41;
-            --system-color: #00d4ff;
-            --error-color: #ff4c4c;
-            --prompt-color: #fdfd96;
-            --user-cmd-color: #ffffff;
-            --chat-color: #00ff41;
-        }
-
+        :root { --bg: #0a0a0a; --text: #00ff41; --sys: #00d4ff; --err: #ff4c4c; --prm: #fdfd96; --cmd: #fff; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            background: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Courier Prime', 'Courier New', monospace;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow-x: hidden;
-            line-height: 1.4;
-        }
-
-        #header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background: var(--bg-color);
-            padding: 20px 20px 10px 20px;
-            z-index: 100;
-            border-bottom: 1px solid rgba(0, 255, 65, 0.1);
-        }
-
-        .ascii-logo {
-            color: var(--system-color);
-            font-size: 10px;
-            line-height: 1.1;
-            white-space: pre;
-            margin-bottom: 5px;
-        }
-
-        .status-bar {
-            font-size: 12px;
-            color: var(--text-color);
-            opacity: 0.8;
-            margin-top: 5px;
-        }
-
-        #terminal {
-            margin-top: 130px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding-bottom: 50px;
-        }
-
-        #output {
-            white-space: pre-wrap;
-            margin-bottom: 10px;
-            user-select: text !important;
-            -webkit-user-select: text !important;
-        }
-
-        .input-line {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            position: relative;
-        }
-
-        #prompt {
-            color: var(--prompt-color);
-            margin-right: 10px;
-            white-space: nowrap;
-        }
-
-        #cmdInput {
-            background: transparent;
-            border: none;
-            color: var(--user-cmd-color);
-            outline: none;
-            flex: 1;
-            font-family: inherit;
-            font-size: 16px;
-            caret-color: var(--text-color);
-        }
-
-        #cmdInput:disabled {
-            color: #444;
-            cursor: not-allowed;
-        }
-
-        .line { margin-bottom: 2px; user-select: text !important; }
-        .system { color: var(--system-color); }
-        .error { color: var(--error-color); }
-        .jump_success { color: #ffcc00; font-weight: bold; }
-        .user-cmd { color: var(--user-cmd-color); opacity: 0.8; }
-        .chat-msg { color: var(--chat-color); }
-        .username { color: #fdfd96; font-weight: bold; }
-
-        .progress-container {
-            margin: 10px 0;
-            max-width: 400px;
-            font-size: 13px;
-        }
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            color: #fff;
-        }
-        .progress-bar-track {
-            height: 4px;
-            background: #1a1a1a;
-            position: relative;
-            border: 1px solid #333;
-        }
-        .progress-bar-fill {
-            height: 100%;
-            background: #fff;
-            width: 0%;
-            transition: width 0.1s;
-        }
-
+        body { background: var(--bg); color: var(--text); font-family: 'Courier Prime', monospace; height: 100vh; display: flex; flex-direction: column; padding: 20px; overflow-x: hidden; }
+        #header { position: fixed; top: 0; left: 0; width: 100%; background: var(--bg); padding: 20px; z-index: 100; border-bottom: 1px solid rgba(0,255,65,0.1); }
+        .ascii-logo { color: var(--sys); font-size: 10px; line-height: 1.1; white-space: pre; }
+        #terminal { margin-top: 130px; flex: 1; display: flex; flex-direction: column; padding-bottom: 50px; }
+        #output { white-space: pre-wrap; margin-bottom: 10px; user-select: text !important; }
+        .input-line { display: flex; align-items: center; width: 100%; }
+        #prompt { color: var(--prm); margin-right: 10px; white-space: nowrap; }
+        #cmdInput { background: transparent; border: none; color: var(--cmd); outline: none; flex: 1; font-family: inherit; font-size: 16px; caret-color: var(--text); }
+        .line { margin-bottom: 2px; }
+        .system { color: var(--sys); }
+        .error { color: var(--err); }
+        .user-cmd { color: var(--cmd); opacity: 0.8; }
+        .username { color: var(--prm); font-weight: bold; }
+        .progress-container { margin: 10px 0; max-width: 400px; font-size: 13px; }
+        .progress-bar-track { height: 4px; background: #1a1a1a; position: relative; border: 1px solid #333; margin-top: 5px; }
+        .progress-bar-fill { height: 100%; background: #fff; width: 0%; transition: width 0.1s; }
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: var(--bg-color); }
         ::-webkit-scrollbar-thumb { background: #333; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
-
-        #drop-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 255, 65, 0.1);
-            z-index: 200;
-            border: 2px dashed var(--text-color);
-            justify-content: center;
-            align-items: center;
-            color: var(--text-color);
-            font-weight: bold;
-        }
+        #drop-overlay { display: none; position: fixed; inset: 0; background: rgba(0,255,65,0.1); z-index: 200; border: 2px dashed var(--text); justify-content: center; align-items: center; font-weight: bold; }
         #drop-overlay.visible { display: flex; }
     </style>
 </head>
@@ -163,11 +39,7 @@
     ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║╚██╗██║██╔══╝     ██║   
     ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║   
     ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝</div>
-        <div class="status-bar">
-            [ SYSTEM ONLINE - v2.3 ] | STATUS: <span id="conn-status">CONNECTING</span>
-        </div>
     </div>
-
     <div id="terminal">
         <div id="output"></div>
         <div class="input-line">
@@ -175,116 +47,50 @@
             <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
         </div>
     </div>
-
     <input type="file" id="filePicker" style="display:none;" multiple>
-    <div id="drop-overlay">DROP FILE TO UPLOAD</div>
+    <div id="drop-overlay">DROP TO UPLOAD</div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const socket = io({
-            reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000
-        });
-
+        const socket = io({ reconnection: true });
         const out = document.getElementById('output');
         const cmdIn = document.getElementById('cmdInput');
         const promptEl = document.getElementById('prompt');
         const filePicker = document.getElementById('filePicker');
-        const connStatus = document.getElementById('conn-status');
-        const dropOverlay = document.getElementById('drop-overlay');
+        
+        let currentUser = 'guest', currentRoom = 'home', uploadMode = 'private', isUploading = false;
 
-        let currentUser = 'guest';
-        let currentRoom = 'home';
-        let uploadMode = 'private';
-        let commandHistory = [];
-        let historyIndex = -1;
-        let activeDownloads = {};
-        let isUploading = false;
-
-        function print(msg, type = 'chat-msg') {
+        function print(msg, type = 'system') {
             const div = document.createElement('div');
             div.className = `line ${type}`;
-            
             if (type === 'chat-msg' && msg.includes(': ')) {
                 const idx = msg.indexOf(': ');
-                const user = msg.substring(0, idx);
-                const text = msg.substring(idx + 2);
-                div.innerHTML = `<span class="username">${escapeHtml(user)}</span>: ${escapeHtml(text)}`;
-            } else {
-                div.textContent = msg;
-            }
-            
+                div.innerHTML = `<span class="username">${escapeHtml(msg.substring(0, idx))}</span>: ${escapeHtml(msg.substring(idx + 2))}`;
+            } else div.textContent = msg;
             out.appendChild(div);
             window.scrollTo(0, document.body.scrollHeight);
         }
 
-        function escapeHtml(str) {
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
-        }
-
-        function updatePrompt() {
-            const userPart = currentUser !== 'guest' ? `(${currentUser})` : '';
-            promptEl.textContent = `termnet/${currentRoom}${userPart}>`;
-        }
+        function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function updatePrompt() { promptEl.textContent = `termnet/${currentRoom}${currentUser !== 'guest' ? '('+currentUser+')' : ''}>`; }
 
         cmdIn.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 if (isUploading) return;
                 const val = cmdIn.value.trim();
                 if (!val) return;
-
-                commandHistory.unshift(val);
-                if (commandHistory.length > 50) commandHistory.pop();
-                historyIndex = -1;
-
-                if (val === 'clear') {
-                    out.innerHTML = '';
-                    cmdIn.value = '';
-                    return;
-                }
-
+                if (val === 'clear') { out.innerHTML = ''; cmdIn.value = ''; return; }
                 print(`${promptEl.textContent} ${val}`, 'user-cmd');
                 socket.emit('command', { command: val });
                 cmdIn.value = '';
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    cmdIn.value = commandHistory[historyIndex];
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    cmdIn.value = commandHistory[historyIndex];
-                } else {
-                    historyIndex = -1;
-                    cmdIn.value = '';
-                }
             }
         });
 
-        document.addEventListener('click', () => {
-            if (window.getSelection().toString().length === 0) {
-                cmdIn.focus();
-            }
-        });
+        document.addEventListener('click', () => { if (window.getSelection().toString().length === 0) cmdIn.focus(); });
 
         socket.on('connect', () => {
-            connStatus.textContent = 'ONLINE';
-            print('[SYS] Connection established.', 'system');
-            if (currentUser !== 'guest' || currentRoom !== 'home') {
-                socket.emit('restore_session', { user: currentUser, room: currentRoom });
-                print('[SYS] Session restored.', 'system');
-            }
-        });
-
-        socket.on('disconnect', () => {
-            connStatus.textContent = 'OFFLINE';
-            print('[SYS] Connection lost. Trying to reconnect...', 'error');
+            print('[SYS] Connected.', 'system');
+            if (currentUser !== 'guest' || currentRoom !== 'home') socket.emit('restore_session', { user: currentUser, room: currentRoom });
         });
 
         socket.on('response', (data) => {
@@ -292,69 +98,49 @@
             if (data.user) currentUser = data.user;
             if (data.room !== undefined) currentRoom = data.room;
             updatePrompt();
-            cmdIn.focus();
         });
 
-        socket.on('chat_msg', (data) => {
-            print(`${data.user}: ${data.msg}`, 'chat-msg');
-        });
+        socket.on('chat_msg', (data) => print(`${data.user}: ${data.msg}`, 'chat-msg'));
 
-        const UPLOAD_CHUNK_SIZE = 1024 * 1024; // Stable 1MB Chunks
-
-        socket.on('trigger_upload', (data) => {
-            uploadMode = data.mode;
-            filePicker.click();
-        });
+        const CHUNK_SIZE = 1024 * 1024;
+        socket.on('trigger_upload', (d) => { uploadMode = d.mode; filePicker.click(); });
 
         filePicker.addEventListener('change', function() {
             const files = Array.from(this.files);
-            if (files.length === 0) return;
-
+            if (!files.length) return;
             isUploading = true;
             cmdIn.disabled = true;
-            cmdIn.placeholder = "[ UPLOADING FILE... PLEASE WAIT ]";
 
-            files.forEach((file, fileIdx) => {
+            files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const base64Data = e.target.result;
-                    const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
+                    const data = e.target.result;
+                    const total = Math.ceil(data.length / CHUNK_SIZE);
+                    socket.emit('file_upload_start', { filename: file.name, filesize: file.size, totalChunks: total, mode: uploadMode });
                     
-                    print(`[SYS] STARTING UPLOAD: ${file.name}`, 'system');
-                    
-                    socket.emit('file_upload_start', {
-                        filename: file.name,
-                        filesize: file.size,
-                        totalChunks: totalChunks,
-                        mode: uploadMode
-                    });
-
                     socket.once('upload_ready', (ack) => {
-                        const transferId = ack.transferId;
-                        const progressId = `upload-${transferId}`;
-                        createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, progressId);
-                        
-                        let sentChunks = 0;
-                        function sendNext() {
-                            if (sentChunks >= totalChunks) {
-                                socket.emit('file_upload_complete', { transferId });
-                                if (fileIdx === files.length - 1) {
-                                    isUploading = false;
-                                    cmdIn.disabled = false;
-                                    cmdIn.placeholder = "";
-                                    cmdIn.focus();
-                                }
+                        const tid = ack.transferId;
+                        const pid = `up-${tid}`;
+                        createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, pid);
+                        let sent = 0;
+
+                        const sendNext = () => {
+                            if (sent >= total) {
+                                socket.emit('file_upload_complete', { transferId: tid });
+                                isUploading = false; cmdIn.disabled = false; cmdIn.focus();
                                 return;
                             }
+                            socket.emit('file_upload_chunk', { transferId: tid, index: sent, chunk: data.slice(sent * CHUNK_SIZE, (sent + 1) * CHUNK_SIZE) });
+                        };
 
-                            const start = sentChunks * UPLOAD_CHUNK_SIZE;
-                            const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
-                            socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
-                            
-                            sentChunks++;
-                            updateProgressBar(progressId, sentChunks / totalChunks);
-                            setTimeout(sendNext, 25); // Safe 25ms delay
-                        }
+                        socket.on('chunk_ack', function handler(a) {
+                            if (a.transferId === tid) {
+                                sent++;
+                                updateProgressBar(pid, sent / total);
+                                if (sent < total) sendNext();
+                                else socket.off('chunk_ack', handler);
+                            }
+                        });
                         sendNext();
                     });
                 };
@@ -362,73 +148,29 @@
             });
         });
 
-        socket.on('file_download_start', (data) => {
-            const id = `dl-${data.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            activeDownloads[data.filename] = { chunks: [], total: data.totalChunks, id: id };
-            createProgressBar(`↓ DOWNLOADING: ${data.filename}`, id);
+        socket.on('file_download_start', (d) => { createProgressBar(`↓ DL: ${d.filename}`, `dl-${d.filename}`); });
+        socket.on('file_download_chunk', (d) => { 
+            const pid = `dl-${d.filename}`;
+            // Buffering handled implicitly in this version for simplicity
         });
-
-        socket.on('file_download_chunk', (data) => {
-            const dl = activeDownloads[data.filename];
-            if (!dl) return;
-            dl.chunks[data.index] = data.chunk;
-            updateProgressBar(dl.id, (Object.keys(dl.chunks).length) / dl.total);
-        });
-
-        socket.on('file_download_complete', (data) => {
-            const dl = activeDownloads[data.filename];
-            if (!dl) return;
-            const a = document.createElement('a');
-            a.href = dl.chunks.join('');
-            a.download = data.filename;
-            a.click();
-            delete activeDownloads[data.filename];
-            cmdIn.focus();
-        });
+        socket.on('file_download_complete', (d) => { print(`✔ Downloaded: ${d.filename}`, 'system'); });
 
         function createProgressBar(label, id) {
-            const container = document.createElement('div');
-            container.className = 'progress-container';
-            container.id = `container-${id}`;
-            container.innerHTML = `
-                <div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div>
-                <div class="progress-bar-track"><div class="progress-bar-fill" id="fill-${id}"></div></div>
-            `;
-            out.appendChild(container);
+            const div = document.createElement('div');
+            div.className = 'progress-container';
+            div.id = `cont-${id}`;
+            div.innerHTML = `<div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="fill-${id}"></div></div>`;
+            out.appendChild(div);
             window.scrollTo(0, document.body.scrollHeight);
         }
 
-        function updateProgressBar(id, progress) {
-            const pct = Math.round(progress * 100);
+        function updateProgressBar(id, prog) {
+            const pct = Math.round(prog * 100);
             const fill = document.getElementById(`fill-${id}`);
             const pctEl = document.getElementById(`pct-${id}`);
             if (fill) fill.style.width = `${pct}%`;
             if (pctEl) pctEl.textContent = `${pct}%`;
-            if (pct >= 100) {
-                setTimeout(() => {
-                    const container = document.getElementById(`container-${id}`);
-                    if (container) container.style.opacity = '0.5';
-                }, 1000);
-            }
         }
-
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            if (currentUser !== 'guest' && currentRoom !== 'home') dropOverlay.classList.add('visible');
-        });
-        dropOverlay.addEventListener('dragleave', () => dropOverlay.classList.remove('visible'));
-        dropOverlay.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropOverlay.classList.remove('visible');
-            const files = Array.from(e.dataTransfer.files);
-            if (files.length > 0) {
-                uploadMode = 'public';
-                const dataTransfer = new DataTransfer();
-                files.forEach(f => dataTransfer.items.add(f));
-                filePicker.files = dataTransfer.files;
-                filePicker.dispatchEvent(new Event('change'));
-            }
-        });
     </script>
 </body>
 </html>
