@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TermNet OS</title>
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #0a0a0a; --text: #00ff41; --sys: #00d4ff; --err: #ff4c4c; --prm: #fdfd96; --cmd: #fff; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); color: var(--text); font-family: 'Courier Prime', monospace; height: 100vh; display: flex; flex-direction: column; padding: 20px; overflow-x: hidden; }
+        body { background: var(--bg); color: var(--text); font-family: 'Courier Prime', monospace; padding: 20px; overflow-x: hidden; height: 100vh; display: flex; flex-direction: column; }
         #header { position: fixed; top: 0; left: 0; width: 100%; background: var(--bg); padding: 20px; z-index: 100; border-bottom: 1px solid rgba(0,255,65,0.1); }
         .ascii-logo { color: var(--sys); font-size: 10px; line-height: 1.1; white-space: pre; }
         #terminal { margin-top: 130px; flex: 1; display: flex; flex-direction: column; padding-bottom: 50px; }
@@ -21,9 +20,6 @@
         .error { color: var(--err); }
         .user-cmd { color: var(--cmd); opacity: 0.8; }
         .username { color: var(--prm); font-weight: bold; }
-        .progress-container { margin: 10px 0; max-width: 400px; font-size: 13px; }
-        .progress-bar-track { height: 4px; background: #1a1a1a; position: relative; border: 1px solid #333; margin-top: 5px; }
-        .progress-bar-fill { height: 100%; background: #fff; width: 0%; transition: width 0.1s; }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #333; }
         #drop-overlay { display: none; position: fixed; inset: 0; background: rgba(0,255,65,0.1); z-index: 200; border: 2px dashed var(--text); justify-content: center; align-items: center; font-weight: bold; }
@@ -52,14 +48,13 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const socket = io({ reconnection: true });
+        const socket = io();
         const out = document.getElementById('output');
         const cmdIn = document.getElementById('cmdInput');
         const promptEl = document.getElementById('prompt');
         const filePicker = document.getElementById('filePicker');
         
-        let currentUser = 'guest', currentRoom = 'home', isUploading = false;
-        let activeDownloads = {};
+        let currentUser = 'guest', currentRoom = 'home', uploadMode = 'public';
 
         function print(msg, type = 'system') {
             const div = document.createElement('div');
@@ -77,7 +72,6 @@
 
         cmdIn.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                if (isUploading) return;
                 const val = cmdIn.value.trim();
                 if (!val) return;
                 if (val === 'clear') { out.innerHTML = ''; cmdIn.value = ''; return; }
@@ -89,10 +83,7 @@
 
         document.addEventListener('click', () => { if (window.getSelection().toString().length === 0) cmdIn.focus(); });
 
-        socket.on('connect', () => {
-            print('[SYS] Online.', 'system');
-            if (currentUser !== 'guest' || currentRoom !== 'home') socket.emit('restore_session', { user: currentUser, room: currentRoom });
-        });
+        socket.on('connect', () => { print('[SYS] Online.', 'system'); });
 
         socket.on('response', (data) => {
             print(`[SYS] ${data.msg}`, data.type || 'system');
@@ -101,96 +92,44 @@
             updatePrompt();
         });
 
-        socket.on('chat_msg', (data) => print(`${data.user}: ${data.msg}`, 'chat-msg'));
-
-        // --- TURBO BINARY UPLOAD ---
-        const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB Jumbo Chunks
-        const WINDOW_SIZE = 2; // Keep 2 chunks in flight
+        socket.on('chat_msg', (d) => print(`${d.user}: ${d.msg}`, 'chat-msg'));
 
         socket.on('trigger_upload', (d) => { uploadMode = d.mode; filePicker.click(); });
 
         filePicker.addEventListener('change', function() {
-            const files = Array.from(this.files);
-            if (!files.length) return;
-            isUploading = true; cmdIn.disabled = true;
-
-            files.forEach(file => {
+            Array.from(this.files).forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const buffer = e.target.result;
-                    const total = Math.ceil(buffer.byteLength / CHUNK_SIZE);
-                    socket.emit('file_upload_start', { filename: file.name, filesize: file.size, totalChunks: total, mode: uploadMode });
-                    
-                    socket.once('upload_ready', (ack) => {
-                        const tid = ack.transferId;
-                        const pid = `up-${tid}`;
-                        createProgressBar(`↑ TURBO: ${file.name}`, pid);
-                        let sent = 0, inFlight = 0;
-
-                        const sendBatch = () => {
-                            while (inFlight < WINDOW_SIZE && sent < total) {
-                                const chunk = buffer.slice(sent * CHUNK_SIZE, (sent + 1) * CHUNK_SIZE);
-                                socket.emit('file_upload_chunk', { transferId: tid, index: sent, chunk: chunk });
-                                sent++; inFlight++;
-                            }
-                        };
-
-                        socket.on('chunk_ack', function handler(a) {
-                            if (a.transferId === tid) {
-                                inFlight--;
-                                updateProgressBar(pid, (sent - inFlight) / total);
-                                if (sent < total) sendBatch();
-                                else if (inFlight === 0) {
-                                    socket.emit('file_upload_complete', { transferId: tid });
-                                    socket.off('chunk_ack', handler);
-                                    isUploading = false; cmdIn.disabled = false; cmdIn.focus();
-                                }
-                            }
-                        });
-                        sendBatch();
-                    });
+                    print(`[SYS] Sending: ${file.name}...`, 'system');
+                    socket.emit('direct_upload', { filename: file.name, content: e.target.result, mode: uploadMode });
                 };
                 reader.readAsArrayBuffer(file);
             });
         });
 
-        // --- TURBO BINARY DOWNLOAD ---
-        socket.on('file_download_start', (d) => {
-            activeDownloads[d.filename] = { chunks: [], total: d.totalChunks };
-            createProgressBar(`↓ DL: ${d.filename}`, `dl-${d.filename}`);
-        });
-        socket.on('file_download_chunk', (d) => {
-            const dl = activeDownloads[d.filename];
-            if (!dl) return;
-            dl.chunks[d.index] = d.chunk;
-            updateProgressBar(`dl-${d.filename}`, (Object.keys(dl.chunks).length / dl.total));
-        });
-        socket.on('file_download_complete', (d) => {
-            const dl = activeDownloads[d.filename];
-            const blob = new Blob(dl.chunks);
+        socket.on('file_download', (d) => {
+            const blob = new Blob([d.content]);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = d.filename;
             a.click();
-            print(`✔ Saved: ${d.filename}`, 'system');
-            delete activeDownloads[d.filename];
+            print(`✔ Downloaded: ${d.filename}`, 'system');
         });
 
-        function createProgressBar(label, id) {
-            const div = document.createElement('div');
-            div.className = 'progress-container';
-            div.innerHTML = `<div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="fill-${id}"></div></div>`;
-            out.appendChild(div);
-            window.scrollTo(0, document.body.scrollHeight);
-        }
-
-        function updateProgressBar(id, prog) {
-            const pct = Math.round(prog * 100);
-            const fill = document.getElementById(`fill-${id}`);
-            const pctEl = document.getElementById(`pct-${id}`);
-            if (fill) fill.style.width = `${pct}%`;
-            if (pctEl) pctEl.textContent = `${pct}%`;
-        }
+        document.addEventListener('dragover', (e) => { e.preventDefault(); if(currentRoom !== 'home') document.getElementById('drop-overlay').classList.add('visible'); });
+        document.getElementById('drop-overlay').addEventListener('dragleave', () => document.getElementById('drop-overlay').classList.remove('visible'));
+        document.getElementById('drop-overlay').addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.getElementById('drop-overlay').classList.remove('visible');
+            Array.from(e.dataTransfer.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    print(`[SYS] Dropped: ${file.name}`, 'system');
+                    socket.emit('direct_upload', { filename: file.name, content: e.target.result, mode: 'public' });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        });
     </script>
 </body>
 </html>

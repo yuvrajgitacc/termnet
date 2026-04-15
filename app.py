@@ -3,23 +3,20 @@ eventlet.monkey_patch()
 
 import sqlite3
 import os
-import uuid
 import math
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'termnet_turbo_v3'
+app.config['SECRET_KEY'] = 'termnet_perfect_v4'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-# Increased buffer and timeout for binary jumbo-streams
+# Set a massive buffer to handle 100MB files in one go
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
     async_mode='eventlet', 
-    ping_timeout=120,
-    ping_interval=25,
-    max_http_buffer_size=110 * 1024 * 1024 # 110MB for overhead
+    max_http_buffer_size=100 * 1024 * 1024
 )
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'termnet.db')
@@ -28,7 +25,6 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 def init_db():
@@ -36,7 +32,6 @@ def init_db():
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY)')
     c.execute('CREATE TABLE IF NOT EXISTS rooms (name TEXT PRIMARY KEY, password TEXT)')
-    # Using BLOB for high-speed binary storage
     c.execute('''CREATE TABLE IF NOT EXISTS files 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   filename TEXT, content BLOB, sender TEXT, room TEXT,
@@ -49,43 +44,35 @@ def init_db():
 init_db()
 
 sessions = {}
-active_transfers = {}
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @socketio.on('connect')
 def handle_connect():
     sessions[request.sid] = {'user': 'guest', 'room': 'home'}
 
-@socketio.on('restore_session')
-def handle_restore(data):
-    sid = request.sid
-    user, room = data.get('user', 'guest'), data.get('room', 'home')
-    sessions[sid] = {'user': user, 'room': room}
-    if room != 'home': join_room(room)
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    sid = request.sid
-    if sid in sessions: del sessions[sid]
-
 @socketio.on('command')
 def handle_command(data):
     sid = request.sid
     if sid not in sessions: sessions[sid] = {'user': 'guest', 'room': 'home'}
+    
     raw = data.get('command', '').strip()
     if not raw: return
-    parts = raw.split(); cmd = parts[0].lower(); args = parts[1:]
+    
+    # Robust Parser: handle "jump r-123" or "jump r - 123"
+    parts = raw.replace('-', ' - ').split()
+    cmd = parts[0].lower()
+    args = parts[1:]
+    
     conn = get_db(); c = conn.cursor()
-
     try:
+        # Cleanup old files
         c.execute("DELETE FROM files WHERE uploaded_at <= datetime('now', '-1 day')")
         conn.commit()
 
         if cmd == "help":
-            msg = "\n[ TERMNET TURBO COMMANDS ]\n" + "-"*35 + \
+            msg = "\n[ TERMNET COMMANDS ]\n" + "-"*35 + \
                   "\n  signup/login <user>  : Identity\n  list                 : Show Rooms" + \
                   "\n  create/jump <r>-<p>  : Room Management\n  share/vault          : File Transfer" + \
                   "\n  files                : List Files\n  fetch <filename>     : Download" + \
@@ -103,25 +90,37 @@ def handle_command(data):
                 except: emit('response', {'type': 'error', 'msg': "Taken."})
 
         elif cmd == "login":
-            u = args[0].lower() if args else ""
-            c.execute("SELECT username FROM users WHERE username=?", (u,))
-            if c.fetchone():
-                sessions[sid]['user'] = u
-                emit('response', {'type': 'system', 'msg': f"Auth: {u}", 'user': u})
-            else: emit('response', {'type': 'error', 'msg': "No user."})
+            if not args: emit('response', {'type': 'error', 'msg': "Usage: login <name>"})
+            else:
+                u = args[0].lower()
+                c.execute("SELECT username FROM users WHERE username=?", (u,))
+                if c.fetchone():
+                    sessions[sid]['user'] = u
+                    emit('response', {'type': 'system', 'msg': f"Auth: {u}", 'user': u})
+                else: emit('response', {'type': 'error', 'msg': "No user."})
 
         elif cmd == "list":
             c.execute("SELECT name FROM rooms")
             rs = "\n".join([f"  ▸ {r['name']}" for r in c.fetchall()])
             emit('response', {'type': 'system', 'msg': f"\n┌─ ROOMS ──┐\n{rs}\n└──────────┘"})
 
+        elif cmd == "create":
+            if len(args) < 3 or args[1] != '-': emit('response', {'type': 'error', 'msg': "Usage: create <n> - <p>"})
+            else:
+                n, p = args[0].lower(), args[2]
+                try:
+                    c.execute("INSERT INTO rooms VALUES (?, ?)", (n, p))
+                    conn.commit()
+                    emit('response', {'type': 'system', 'msg': f"Room '{n}' created."})
+                except: emit('response', {'type': 'error', 'msg': "Exists."})
+
         elif cmd == "jump":
-            if len(args) < 3: emit('response', {'type': 'error', 'msg': "jump <n> - <p>"})
+            if len(args) < 3 or args[1] != '-': emit('response', {'type': 'error', 'msg': "Usage: jump <n> - <p>"})
             else:
                 n, p = args[0].lower(), args[2]
                 c.execute("SELECT password FROM rooms WHERE name=?", (n,))
                 row = c.fetchone()
-                if row and row['password'] == p:
+                if row and str(row['password']) == str(p):
                     old = sessions[sid]['room']
                     if old != 'home': leave_room(old)
                     join_room(n); sessions[sid]['room'] = n
@@ -140,14 +139,7 @@ def handle_command(data):
             c.execute("SELECT filename, content, filesize FROM files WHERE LOWER(filename)=LOWER(?) AND (room=? OR (room='private' AND sender=?)) ORDER BY id DESC LIMIT 1", (fn, r, u))
             row = c.fetchone()
             if row:
-                content = row['content']
-                chunk_size = 4 * 1024 * 1024 # 4MB Download chunks
-                total = math.ceil(len(content) / chunk_size)
-                emit('file_download_start', {'filename': row['filename'], 'totalChunks': total})
-                for i in range(total):
-                    emit('file_download_chunk', {'filename': row['filename'], 'chunk': content[i*chunk_size:(i+1)*chunk_size], 'index': i})
-                    eventlet.sleep(0)
-                emit('file_download_complete', {'filename': row['filename']})
+                emit('file_download', {'filename': row['filename'], 'content': row['content']})
             else: emit('response', {'type': 'error', 'msg': "Not found."})
 
         elif cmd == "share":
@@ -158,46 +150,42 @@ def handle_command(data):
             if sessions[sid]['user'] == 'guest': emit('response', {'type': 'error', 'msg': "Login first."})
             else: emit('trigger_upload', {'mode': 'private'})
 
+        elif cmd == "profile":
+            u = sessions[sid]['user']
+            c.execute("SELECT filename, filesize FROM files WHERE sender=? ORDER BY id DESC", (u,))
+            fs = "\n".join([f"  │ ◈ {f['filename']} ({format_size(f['filesize'])})" for f in c.fetchall()])
+            card = f"\n  ┌────────────────────────────┐\n  │ IDENTITY: {u.upper().ljust(16)} │\n  ├────────────────────────────┤\n{fs if fs else '  │ (Vault Empty)'}\n  └────────────────────────────┘"
+            emit('response', {'type': 'system', 'msg': card})
+
         elif cmd == "exit":
             r = sessions[sid]['room']
             if r != 'home':
                 leave_room(r); sessions[sid]['room'] = 'home'
-                emit('response', {'type': 'system', 'msg': "At home.", 'room': 'home'})
+                emit('response', {'type': 'system', 'msg': "Returned home.", 'room': 'home'})
         
         elif cmd == "msg":
             r = sessions[sid]['room']
-            if r != 'home': emit('chat_msg', {'user': sessions[sid]['user'], 'msg': " ".join(args)}, to=r)
+            if r != 'home': socketio.emit('chat_msg', {'user': sessions[sid]['user'], 'msg': " ".join(args)}, room=r)
 
     except Exception as e: print(f"Error: {e}")
     finally: conn.close()
 
-@socketio.on('file_upload_start')
-def handle_upload_start(d):
-    tid = str(uuid.uuid4())[:8]
-    active_transfers[tid] = {'chunks': {}, 'total': d['totalChunks'], 'received': 0, 'filename': d['filename'], 'filesize': d['filesize'], 'mode': d['mode'], 'sid': request.sid}
-    emit('upload_ready', {'transferId': tid})
-
-@socketio.on('file_upload_chunk')
-def handle_upload_chunk(d):
-    tid = d.get('transferId')
-    if tid in active_transfers:
-        active_transfers[tid]['chunks'][d['index']] = d['chunk'] # Binary data received
-        active_transfers[tid]['received'] += 1
-        emit('chunk_ack', {'transferId': tid, 'index': d['index']})
-
-@socketio.on('file_upload_complete')
-def handle_upload_complete(d):
-    tid = d.get('transferId')
-    if tid not in active_transfers: return
-    t = active_transfers[tid]; user = sessions[t['sid']]['user']
-    content = b"".join([t['chunks'][i] for i in range(t['total'])])
-    room = sessions[t['sid']]['room'] if t['mode'] == 'public' else 'private'
+@socketio.on('direct_upload')
+def handle_direct_upload(d):
+    sid = request.sid; u = sessions[sid]['user']; r = sessions[sid]['room']
+    mode, filename, content = d.get('mode'), d.get('filename'), d.get('content')
+    if not u or u == 'guest': return
+    
+    target_room = r if mode == 'public' else 'private'
     conn = get_db()
-    conn.execute("INSERT INTO files (filename, content, sender, room, filesize) VALUES (?, ?, ?, ?, ?)", (t['filename'], sqlite3.Binary(content), user, room, t['filesize']))
+    conn.execute("INSERT INTO files (filename, content, sender, room, filesize) VALUES (?, ?, ?, ?, ?)", 
+                 (filename, sqlite3.Binary(content), u, target_room, len(content)))
     conn.commit(); conn.close()
-    if t['mode'] == 'public': socketio.emit('response', {'type': 'system', 'msg': f"BROADCAST: {user} shared '{t['filename']}'"}, room=room)
-    else: emit('response', {'type': 'system', 'msg': f"VAULT: '{t['filename']}' saved."}, to=t['sid'])
-    del active_transfers[tid]
+    
+    if mode == 'public':
+        socketio.emit('response', {'type': 'system', 'msg': f"BROADCAST: {u} shared '{filename}'"}, room=r)
+    else:
+        emit('response', {'type': 'system', 'msg': f"VAULT: '{filename}' saved."})
 
 def format_size(b):
     for u in ['B','KB','MB','GB']:
