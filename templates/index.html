@@ -32,7 +32,6 @@
             line-height: 1.4;
         }
 
-        /* Fixed Header for ASCII Art */
         #header {
             position: fixed;
             top: 0;
@@ -59,24 +58,26 @@
             margin-top: 5px;
         }
 
-        /* Main Terminal Area */
         #terminal {
-            margin-top: 130px; /* Offset for fixed header */
+            margin-top: 130px;
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding-bottom: 100px; /* Space to click and focus below output */
+            padding-bottom: 50px;
         }
 
         #output {
             white-space: pre-wrap;
             margin-bottom: 10px;
+            user-select: text !important;
+            -webkit-user-select: text !important;
         }
 
         .input-line {
             display: flex;
             align-items: center;
             width: 100%;
+            position: relative;
         }
 
         #prompt {
@@ -93,11 +94,10 @@
             flex: 1;
             font-family: inherit;
             font-size: 16px;
-            caret-color: transparent; /* Hide default, use custom cursor */
+            caret-color: var(--text-color); /* Using native caret for reliability */
         }
 
-        /* Message Types */
-        .line { margin-bottom: 2px; }
+        .line { margin-bottom: 2px; user-select: text !important; }
         .system { color: var(--system-color); }
         .error { color: var(--error-color); }
         .jump_success { color: #ffcc00; font-weight: bold; }
@@ -105,7 +105,6 @@
         .chat-msg { color: var(--chat-color); }
         .username { color: #fdfd96; font-weight: bold; }
 
-        /* Robust Terminal Progress Bar */
         .progress-container {
             margin: 10px 0;
             max-width: 400px;
@@ -130,29 +129,6 @@
             transition: width 0.1s;
         }
 
-        /* Smooth Terminal Selection */
-        #terminal, #output, .line, .line * {
-            user-select: text !important;
-            -webkit-user-select: text !important;
-            cursor: text;
-        }
-
-        /* Terminal Cursor */
-        .cursor {
-            display: inline-block;
-            width: 10px;
-            height: 18px;
-            background: var(--text-color);
-            margin-left: 2px;
-            animation: blink 1s step-end infinite;
-            vertical-align: middle;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-
-        /* Hide Scrollbar but allow scrolling */
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: var(--bg-color); }
         ::-webkit-scrollbar-thumb { background: #333; }
@@ -183,7 +159,7 @@
     ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║   
     ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝</div>
         <div class="status-bar">
-            [ SYSTEM ONLINE - v2.1 ] | STATUS: <span id="conn-status">CONNECTING</span>
+            [ SYSTEM ONLINE - v2.2 ] | STATUS: <span id="conn-status">CONNECTING</span>
         </div>
     </div>
 
@@ -192,13 +168,10 @@
         <div class="input-line">
             <span id="prompt">termnet/home></span>
             <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
-            <span class="cursor"></span>
         </div>
     </div>
 
-    <!-- Hidden file picker -->
     <input type="file" id="filePicker" style="display:none;" multiple>
-
     <div id="drop-overlay">DROP FILE TO UPLOAD</div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -246,7 +219,6 @@
             promptEl.textContent = `termnet/${currentRoom}${userPart}>`;
         }
 
-        // --- COMMAND HANDLING ---
         cmdIn.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const val = cmdIn.value.trim();
@@ -283,18 +255,13 @@
             }
         });
 
-        // Smooth focus: Only focus if the user isn't selecting text
-        document.addEventListener('mouseup', () => {
-            const selection = window.getSelection().toString();
-            if (!selection) {
+        // Global click handler to always return focus to input
+        document.addEventListener('click', () => {
+            if (window.getSelection().toString().length === 0) {
                 cmdIn.focus();
             }
         });
 
-        // Initial focus
-        window.onload = () => cmdIn.focus();
-
-        // --- SOCKET EVENTS ---
         socket.on('connect', () => {
             connStatus.textContent = 'ONLINE';
             print('[SYS] Connection established.', 'system');
@@ -310,13 +277,13 @@
             if (data.user) currentUser = data.user;
             if (data.room !== undefined) currentRoom = data.room;
             updatePrompt();
+            cmdIn.focus();
         });
 
         socket.on('chat_msg', (data) => {
             print(`${data.user}: ${data.msg}`, 'chat-msg');
         });
 
-        // --- FILE UPLOAD (CHUNKED) ---
         const UPLOAD_CHUNK_SIZE = 64 * 1024;
 
         socket.on('trigger_upload', (data) => {
@@ -333,9 +300,8 @@
                 reader.onload = (e) => {
                     const base64Data = e.target.result;
                     const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
-                    const isImage = file.type.startsWith('image/');
                     
-                    print(`[SYS] ${isImage ? 'IMAGE' : 'FILE'} DETECTED: ${file.name}`, 'system');
+                    print(`[SYS] FILE DETECTED: ${file.name}`, 'system');
                     
                     socket.emit('file_upload_start', {
                         filename: file.name,
@@ -355,13 +321,13 @@
                             const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
                             socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
                             sentChunks++;
-                            
                             updateProgressBar(progressId, sentChunks / totalChunks);
 
                             if (sentChunks < totalChunks) {
                                 setTimeout(sendNextChunk, 0);
                             } else {
                                 socket.emit('file_upload_complete', { transferId });
+                                cmdIn.focus();
                             }
                         }
                         sendNextChunk();
@@ -371,7 +337,6 @@
             });
         });
 
-        // --- FILE DOWNLOAD (CHUNKED) ---
         socket.on('file_download_start', (data) => {
             const id = `dl-${data.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
             activeDownloads[data.filename] = { chunks: [], total: data.totalChunks, id: id };
@@ -393,9 +358,9 @@
             a.download = data.filename;
             a.click();
             delete activeDownloads[data.filename];
+            cmdIn.focus();
         });
 
-        // --- PROGRESS BAR UTILS ---
         function createProgressBar(label, id) {
             const container = document.createElement('div');
             container.className = 'progress-container';
@@ -422,7 +387,6 @@
             }
         }
 
-        // --- DRAG & DROP ---
         document.addEventListener('dragover', (e) => {
             e.preventDefault();
             if (currentUser !== 'guest' && currentRoom !== 'home') dropOverlay.classList.add('visible');
