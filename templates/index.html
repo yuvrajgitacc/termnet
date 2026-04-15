@@ -94,7 +94,12 @@
             flex: 1;
             font-family: inherit;
             font-size: 16px;
-            caret-color: var(--text-color); /* Using native caret for reliability */
+            caret-color: var(--text-color);
+        }
+
+        #cmdInput:disabled {
+            color: #444;
+            cursor: not-allowed;
         }
 
         .line { margin-bottom: 2px; user-select: text !important; }
@@ -159,7 +164,7 @@
     ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║ ╚████║███████╗   ██║   
     ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝</div>
         <div class="status-bar">
-            [ SYSTEM ONLINE - v2.2 ] | STATUS: <span id="conn-status">CONNECTING</span>
+            [ SYSTEM ONLINE - v2.3 ] | STATUS: <span id="conn-status">CONNECTING</span>
         </div>
     </div>
 
@@ -176,7 +181,12 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const socket = io();
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000
+        });
+
         const out = document.getElementById('output');
         const cmdIn = document.getElementById('cmdInput');
         const promptEl = document.getElementById('prompt');
@@ -190,6 +200,7 @@
         let commandHistory = [];
         let historyIndex = -1;
         let activeDownloads = {};
+        let isUploading = false;
 
         function print(msg, type = 'chat-msg') {
             const div = document.createElement('div');
@@ -221,6 +232,7 @@
 
         cmdIn.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
+                if (isUploading) return;
                 const val = cmdIn.value.trim();
                 if (!val) return;
 
@@ -255,7 +267,6 @@
             }
         });
 
-        // Global click handler to always return focus to input
         document.addEventListener('click', () => {
             if (window.getSelection().toString().length === 0) {
                 cmdIn.focus();
@@ -265,11 +276,15 @@
         socket.on('connect', () => {
             connStatus.textContent = 'ONLINE';
             print('[SYS] Connection established.', 'system');
+            if (currentUser !== 'guest' || currentRoom !== 'home') {
+                socket.emit('restore_session', { user: currentUser, room: currentRoom });
+                print('[SYS] Session restored.', 'system');
+            }
         });
 
         socket.on('disconnect', () => {
             connStatus.textContent = 'OFFLINE';
-            print('[SYS] Connection lost.', 'error');
+            print('[SYS] Connection lost. Trying to reconnect...', 'error');
         });
 
         socket.on('response', (data) => {
@@ -284,7 +299,7 @@
             print(`${data.user}: ${data.msg}`, 'chat-msg');
         });
 
-        const UPLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
+        const UPLOAD_CHUNK_SIZE = 1024 * 1024; // Stable 1MB Chunks
 
         socket.on('trigger_upload', (data) => {
             uploadMode = data.mode;
@@ -295,13 +310,17 @@
             const files = Array.from(this.files);
             if (files.length === 0) return;
 
-            files.forEach(file => {
+            isUploading = true;
+            cmdIn.disabled = true;
+            cmdIn.placeholder = "[ UPLOADING FILE... PLEASE WAIT ]";
+
+            files.forEach((file, fileIdx) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const base64Data = e.target.result;
                     const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
                     
-                    print(`[SYS] UPLOADING: ${file.name}`, 'system');
+                    print(`[SYS] STARTING UPLOAD: ${file.name}`, 'system');
                     
                     socket.emit('file_upload_start', {
                         filename: file.name,
@@ -316,23 +335,27 @@
                         createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, progressId);
                         
                         let sentChunks = 0;
-                        function sendBurst() {
-                            for (let i = 0; i < 5 && sentChunks < totalChunks; i++) {
-                                const start = sentChunks * UPLOAD_CHUNK_SIZE;
-                                const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
-                                socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
-                                sentChunks++;
-                                updateProgressBar(progressId, sentChunks / totalChunks);
+                        function sendNext() {
+                            if (sentChunks >= totalChunks) {
+                                socket.emit('file_upload_complete', { transferId });
+                                if (fileIdx === files.length - 1) {
+                                    isUploading = false;
+                                    cmdIn.disabled = false;
+                                    cmdIn.placeholder = "";
+                                    cmdIn.focus();
+                                }
+                                return;
                             }
 
-                            if (sentChunks < totalChunks) {
-                                setTimeout(sendBurst, 0);
-                            } else {
-                                socket.emit('file_upload_complete', { transferId });
-                                cmdIn.focus();
-                            }
+                            const start = sentChunks * UPLOAD_CHUNK_SIZE;
+                            const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
+                            socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
+                            
+                            sentChunks++;
+                            updateProgressBar(progressId, sentChunks / totalChunks);
+                            setTimeout(sendNext, 25); // Safe 25ms delay
                         }
-                        sendBurst();
+                        sendNext();
                     });
                 };
                 reader.readAsDataURL(file);

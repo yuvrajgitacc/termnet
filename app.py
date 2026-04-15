@@ -75,6 +75,17 @@ def handle_connect():
     sessions[request.sid] = {'user': 'guest', 'room': 'home'}
     print(f"[+] Connected: {request.sid}")
 
+@socketio.on('restore_session')
+def handle_restore(data):
+    """Restore user identity and room after a reconnection."""
+    sid = request.sid
+    user = data.get('user', 'guest')
+    room = data.get('room', 'home')
+    sessions[sid] = {'user': user, 'room': room}
+    if room != 'home':
+        join_room(room)
+    print(f"[*] Restored: {user} in {room} (SID: {sid})")
+
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
