@@ -121,11 +121,27 @@ def handle_command(data):
                   "\n  destroy <room_name>  : Remove a Room" + \
                   "\n  vault                : Private Save" + \
                   "\n  share                : Public Room Share" + \
+                  "\n  files                : List Room Files" + \
                   "\n  fetch <filename>     : Download File" + \
                   "\n  profile              : View Your Vault" + \
                   "\n  exit / clear         : Navigation" + \
                   "\n" + "-" * 35
             emit('response', {'type': 'system', 'msg': msg})
+
+        # --- FILES (List shared files in the current room) ---
+        elif cmd == "files":
+            current_room = sessions[sid]['room']
+            if current_room == 'home':
+                emit('response', {'type': 'error', 'msg': "Jump to a room first."})
+            else:
+                c.execute("SELECT filename, filesize, sender, uploaded_at FROM files WHERE room=? ORDER BY uploaded_at DESC", (current_room,))
+                files = c.fetchall()
+                if files:
+                    f_list = "\n".join([f"  ▸ {f['filename']} ({format_size(f['filesize'] or 0)}) [by {f['sender']}]" for f in files])
+                    msg = f"\n┌─ SHARED IN '{current_room}' ──┐\n{f_list}\n└──────────────────────────┘"
+                else:
+                    msg = f"\n[!] No files shared in '{current_room}' yet."
+                emit('response', {'type': 'system', 'msg': msg})
 
         # --- SIGNUP ---
         elif cmd == "signup":
