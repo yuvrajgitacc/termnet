@@ -360,22 +360,12 @@ def handle_upload_chunk(data):
     transfer_id = data.get('transferId')
     
     if transfer_id not in active_transfers:
-        emit('response', {'type': 'error', 'msg': "Transfer session expired."})
         return
     
     transfer = active_transfers[transfer_id]
     idx = data['index']
     transfer['chunks'][idx] = data['chunk']
     transfer['received'] += 1
-    
-    # Send progress back to client
-    progress = transfer['received'] / transfer['total']
-    emit('upload_progress', {
-        'transferId': transfer_id,
-        'progress': progress,
-        'received': transfer['received'],
-        'total': transfer['total']
-    })
 
 
 @socketio.on('file_upload_complete')
@@ -385,13 +375,12 @@ def handle_upload_complete(data):
     transfer_id = data.get('transferId')
     
     if transfer_id not in active_transfers:
-        emit('response', {'type': 'error', 'msg': "Transfer session expired."})
         return
     
     transfer = active_transfers[transfer_id]
     
-    # Reassemble chunks in order
-    content = ''.join([transfer['chunks'][i] for i in range(transfer['total'])])
+    # Fast reassembly
+    content = "".join([transfer['chunks'][i] for i in range(transfer['total'])])
     
     filename = transfer['filename']
     filesize = transfer['filesize']
@@ -408,10 +397,10 @@ def handle_upload_complete(data):
         conn.commit()
         
         if mode == 'public':
-            emit('response', {
+            socketio.emit('response', {
                 'type': 'system', 
                 'msg': f"BROADCAST: {user} shared a file -> '{filename}' ({format_size(filesize)})"
-            }, to=sessions[sid]['room'])
+            }, room=room)
         else:
             emit('response', {
                 'type': 'system', 
@@ -419,7 +408,6 @@ def handle_upload_complete(data):
             })
     except Exception as e:
         print(f"[!] File save error: {e}")
-        emit('response', {'type': 'error', 'msg': "Failed to save file."})
     finally:
         conn.close()
         # Cleanup transfer

@@ -284,7 +284,7 @@
             print(`${data.user}: ${data.msg}`, 'chat-msg');
         });
 
-        const UPLOAD_CHUNK_SIZE = 64 * 1024;
+        const UPLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
 
         socket.on('trigger_upload', (data) => {
             uploadMode = data.mode;
@@ -301,7 +301,7 @@
                     const base64Data = e.target.result;
                     const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
                     
-                    print(`[SYS] FILE DETECTED: ${file.name}`, 'system');
+                    print(`[SYS] UPLOADING: ${file.name}`, 'system');
                     
                     socket.emit('file_upload_start', {
                         filename: file.name,
@@ -316,21 +316,23 @@
                         createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, progressId);
                         
                         let sentChunks = 0;
-                        function sendNextChunk() {
-                            const start = sentChunks * UPLOAD_CHUNK_SIZE;
-                            const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
-                            socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
-                            sentChunks++;
-                            updateProgressBar(progressId, sentChunks / totalChunks);
+                        function sendBurst() {
+                            for (let i = 0; i < 5 && sentChunks < totalChunks; i++) {
+                                const start = sentChunks * UPLOAD_CHUNK_SIZE;
+                                const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
+                                socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
+                                sentChunks++;
+                                updateProgressBar(progressId, sentChunks / totalChunks);
+                            }
 
                             if (sentChunks < totalChunks) {
-                                setTimeout(sendNextChunk, 0);
+                                setTimeout(sendBurst, 0);
                             } else {
                                 socket.emit('file_upload_complete', { transferId });
                                 cmdIn.focus();
                             }
                         }
-                        sendNextChunk();
+                        sendBurst();
                     });
                 };
                 reader.readAsDataURL(file);
