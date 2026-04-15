@@ -65,6 +65,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            padding-bottom: 100px; /* Space to click and focus below output */
         }
 
         #output {
@@ -92,7 +93,7 @@
             flex: 1;
             font-family: inherit;
             font-size: 16px;
-            caret-color: var(--text-color);
+            caret-color: transparent; /* Hide default, use custom cursor */
         }
 
         /* Message Types */
@@ -104,23 +105,23 @@
         .chat-msg { color: var(--chat-color); }
         .username { color: #fdfd96; font-weight: bold; }
 
-        /* Minimal Progress Bar Styles */
+        /* Robust Terminal Progress Bar */
         .progress-container {
-            margin: 5px 0;
-            padding: 5px 0;
-            max-width: 300px;
-            font-size: 12px;
+            margin: 10px 0;
+            max-width: 400px;
+            font-size: 13px;
         }
         .progress-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 3px;
+            margin-bottom: 5px;
             color: #fff;
         }
         .progress-bar-track {
-            height: 2px;
-            background: #222;
+            height: 4px;
+            background: #1a1a1a;
             position: relative;
+            border: 1px solid #333;
         }
         .progress-bar-fill {
             height: 100%;
@@ -129,10 +130,26 @@
             transition: width 0.1s;
         }
 
-        /* Allow text selection for copy-paste */
-        #output {
-            user-select: text;
-            -webkit-user-select: text;
+        /* Smooth Terminal Selection */
+        #terminal, #output, .line, .line * {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+            cursor: text;
+        }
+
+        /* Terminal Cursor */
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 18px;
+            background: var(--text-color);
+            margin-left: 2px;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
         }
 
         /* Hide Scrollbar but allow scrolling */
@@ -175,10 +192,13 @@
         <div class="input-line">
             <span id="prompt">termnet/home></span>
             <input type="text" id="cmdInput" autofocus spellcheck="false" autocomplete="off">
+            <span class="cursor"></span>
         </div>
     </div>
 
-    <input type="file" id="filePicker" style="display:none;">
+    <!-- Hidden file picker -->
+    <input type="file" id="filePicker" style="display:none;" multiple>
+
     <div id="drop-overlay">DROP FILE TO UPLOAD</div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -301,55 +321,53 @@
 
         socket.on('trigger_upload', (data) => {
             uploadMode = data.mode;
-            // Ask user if they want to upload a folder or files
-            print(`[SYS] Prepare for ${uploadMode} upload. Select File(s) or Folder.`, 'system');
-            if (confirm("Upload a Folder? (Cancel for Single/Multiple Files)")) {
-                filePicker.click();
-            } else {
-                singleFilePicker.click();
-            }
+            filePicker.click();
         });
 
-        [filePicker, singleFilePicker].forEach(picker => {
-            picker.addEventListener('change', function() {
-                const files = Array.from(this.files);
-                if (files.length === 0) return;
+        filePicker.addEventListener('change', function() {
+            const files = Array.from(this.files);
+            if (files.length === 0) return;
 
-                files.forEach(file => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const base64Data = e.target.result;
-                        const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
-                        const isImage = file.type.startsWith('image/');
-                        
-                        print(`[SYS] ${isImage ? 'IMAGE' : 'FILE'} DETECTED: ${file.name}`, 'system');
-                        
-                        socket.emit('file_upload_start', {
-                            filename: file.name,
-                            filesize: file.size,
-                            totalChunks: totalChunks,
-                            mode: uploadMode
-                        });
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64Data = e.target.result;
+                    const totalChunks = Math.ceil(base64Data.length / UPLOAD_CHUNK_SIZE);
+                    const isImage = file.type.startsWith('image/');
+                    
+                    print(`[SYS] ${isImage ? 'IMAGE' : 'FILE'} DETECTED: ${file.name}`, 'system');
+                    
+                    socket.emit('file_upload_start', {
+                        filename: file.name,
+                        filesize: file.size,
+                        totalChunks: totalChunks,
+                        mode: uploadMode
+                    });
 
-                        socket.once('upload_ready', (ack) => {
-                            const transferId = ack.transferId;
-                            createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, `upload-${transferId}`);
+                    socket.once('upload_ready', (ack) => {
+                        const transferId = ack.transferId;
+                        const progressId = `upload-${transferId}`;
+                        createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, progressId);
+                        
+                        let sentChunks = 0;
+                        function sendNextChunk() {
+                            const start = sentChunks * UPLOAD_CHUNK_SIZE;
+                            const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
+                            socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
+                            sentChunks++;
                             
-                            let sentChunks = 0;
-                            function sendNextChunk() {
-                                const start = sentChunks * UPLOAD_CHUNK_SIZE;
-                                const end = Math.min(start + UPLOAD_CHUNK_SIZE, base64Data.length);
-                                socket.emit('file_upload_chunk', { transferId, index: sentChunks, chunk: base64Data.slice(start, end) });
-                                sentChunks++;
-                                updateProgressBar(`upload-${transferId}`, sentChunks / totalChunks);
-                                if (sentChunks < totalChunks) setTimeout(sendNextChunk, 0);
-                                else socket.emit('file_upload_complete', { transferId });
+                            updateProgressBar(progressId, sentChunks / totalChunks);
+
+                            if (sentChunks < totalChunks) {
+                                setTimeout(sendNextChunk, 0);
+                            } else {
+                                socket.emit('file_upload_complete', { transferId });
                             }
-                            sendNextChunk();
-                        });
-                    };
-                    reader.readAsDataURL(file);
-                });
+                        }
+                        sendNextChunk();
+                    });
+                };
+                reader.readAsDataURL(file);
             });
         });
 
@@ -413,11 +431,11 @@
         dropOverlay.addEventListener('drop', (e) => {
             e.preventDefault();
             dropOverlay.classList.remove('visible');
-            const file = e.dataTransfer.files[0];
-            if (file) {
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
                 uploadMode = 'public';
                 const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
+                files.forEach(f => dataTransfer.items.add(f));
                 filePicker.files = dataTransfer.files;
                 filePicker.dispatchEvent(new Event('change'));
             }
