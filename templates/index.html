@@ -58,7 +58,8 @@
         const promptEl = document.getElementById('prompt');
         const filePicker = document.getElementById('filePicker');
         
-        let currentUser = 'guest', currentRoom = 'home', uploadMode = 'private', isUploading = false;
+        let currentUser = 'guest', currentRoom = 'home', isUploading = false;
+        let activeDownloads = {};
 
         function print(msg, type = 'system') {
             const div = document.createElement('div');
@@ -89,7 +90,7 @@
         document.addEventListener('click', () => { if (window.getSelection().toString().length === 0) cmdIn.focus(); });
 
         socket.on('connect', () => {
-            print('[SYS] Connected.', 'system');
+            print('[SYS] Online.', 'system');
             if (currentUser !== 'guest' || currentRoom !== 'home') socket.emit('restore_session', { user: currentUser, room: currentRoom });
         });
 
@@ -102,63 +103,82 @@
 
         socket.on('chat_msg', (data) => print(`${data.user}: ${data.msg}`, 'chat-msg'));
 
-        const CHUNK_SIZE = 1024 * 1024;
+        // --- TURBO BINARY UPLOAD ---
+        const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB Jumbo Chunks
+        const WINDOW_SIZE = 2; // Keep 2 chunks in flight
+
         socket.on('trigger_upload', (d) => { uploadMode = d.mode; filePicker.click(); });
 
         filePicker.addEventListener('change', function() {
             const files = Array.from(this.files);
             if (!files.length) return;
-            isUploading = true;
-            cmdIn.disabled = true;
+            isUploading = true; cmdIn.disabled = true;
 
             files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const data = e.target.result;
-                    const total = Math.ceil(data.length / CHUNK_SIZE);
+                    const buffer = e.target.result;
+                    const total = Math.ceil(buffer.byteLength / CHUNK_SIZE);
                     socket.emit('file_upload_start', { filename: file.name, filesize: file.size, totalChunks: total, mode: uploadMode });
                     
                     socket.once('upload_ready', (ack) => {
                         const tid = ack.transferId;
                         const pid = `up-${tid}`;
-                        createProgressBar(`↑ ${uploadMode.toUpperCase()}: ${file.name}`, pid);
-                        let sent = 0;
+                        createProgressBar(`↑ TURBO: ${file.name}`, pid);
+                        let sent = 0, inFlight = 0;
 
-                        const sendNext = () => {
-                            if (sent >= total) {
-                                socket.emit('file_upload_complete', { transferId: tid });
-                                isUploading = false; cmdIn.disabled = false; cmdIn.focus();
-                                return;
+                        const sendBatch = () => {
+                            while (inFlight < WINDOW_SIZE && sent < total) {
+                                const chunk = buffer.slice(sent * CHUNK_SIZE, (sent + 1) * CHUNK_SIZE);
+                                socket.emit('file_upload_chunk', { transferId: tid, index: sent, chunk: chunk });
+                                sent++; inFlight++;
                             }
-                            socket.emit('file_upload_chunk', { transferId: tid, index: sent, chunk: data.slice(sent * CHUNK_SIZE, (sent + 1) * CHUNK_SIZE) });
                         };
 
                         socket.on('chunk_ack', function handler(a) {
                             if (a.transferId === tid) {
-                                sent++;
-                                updateProgressBar(pid, sent / total);
-                                if (sent < total) sendNext();
-                                else socket.off('chunk_ack', handler);
+                                inFlight--;
+                                updateProgressBar(pid, (sent - inFlight) / total);
+                                if (sent < total) sendBatch();
+                                else if (inFlight === 0) {
+                                    socket.emit('file_upload_complete', { transferId: tid });
+                                    socket.off('chunk_ack', handler);
+                                    isUploading = false; cmdIn.disabled = false; cmdIn.focus();
+                                }
                             }
                         });
-                        sendNext();
+                        sendBatch();
                     });
                 };
-                reader.readAsDataURL(file);
+                reader.readAsArrayBuffer(file);
             });
         });
 
-        socket.on('file_download_start', (d) => { createProgressBar(`↓ DL: ${d.filename}`, `dl-${d.filename}`); });
-        socket.on('file_download_chunk', (d) => { 
-            const pid = `dl-${d.filename}`;
-            // Buffering handled implicitly in this version for simplicity
+        // --- TURBO BINARY DOWNLOAD ---
+        socket.on('file_download_start', (d) => {
+            activeDownloads[d.filename] = { chunks: [], total: d.totalChunks };
+            createProgressBar(`↓ DL: ${d.filename}`, `dl-${d.filename}`);
         });
-        socket.on('file_download_complete', (d) => { print(`✔ Downloaded: ${d.filename}`, 'system'); });
+        socket.on('file_download_chunk', (d) => {
+            const dl = activeDownloads[d.filename];
+            if (!dl) return;
+            dl.chunks[d.index] = d.chunk;
+            updateProgressBar(`dl-${d.filename}`, (Object.keys(dl.chunks).length / dl.total));
+        });
+        socket.on('file_download_complete', (d) => {
+            const dl = activeDownloads[d.filename];
+            const blob = new Blob(dl.chunks);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = d.filename;
+            a.click();
+            print(`✔ Saved: ${d.filename}`, 'system');
+            delete activeDownloads[d.filename];
+        });
 
         function createProgressBar(label, id) {
             const div = document.createElement('div');
             div.className = 'progress-container';
-            div.id = `cont-${id}`;
             div.innerHTML = `<div class="progress-header"><span>${label}</span><span id="pct-${id}">0%</span></div><div class="progress-bar-track"><div class="progress-bar-fill" id="fill-${id}"></div></div>`;
             out.appendChild(div);
             window.scrollTo(0, document.body.scrollHeight);
